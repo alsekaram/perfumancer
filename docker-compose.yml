@@ -1,0 +1,20 @@
+services:
+
+  web:
+    build: .
+    command: ["uwsgi", "--ini", "/code/config/uwsgi/uwsgi.ini"]
+    restart: always
+    volumes:
+      - .:/code
+
+    environment:
+      - DJANGO_SETTINGS_MODULE=perfumancer.settings.prod
+
+  nginx:
+    image: nginx:1.25.5
+    restart: always
+    volumes:
+      - ./config/nginx:/etc/nginx/templates
+      - .:/code
+    ports:
+      - "80:80"
