@@ -14,7 +14,7 @@
 1. Склонировать проект:
    ```bash
    git clone https://github.com/alsekaram/perfumancer
-   cd perfumancer_django
+   cd perfumancer
    ```
 2. Настроить файл `.env`:
    ```bash
