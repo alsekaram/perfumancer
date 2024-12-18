@@ -13,7 +13,7 @@
 
 1. Склонировать проект:
    ```bash
-   git clone <URL_РЕПОЗИТОРИЯ>
+   git clone https://github.com/alsekaram/perfumancer
    cd perfumancer_django
    ```
 2. Настроить файл `.env`:
