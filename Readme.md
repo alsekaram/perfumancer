@@ -21,13 +21,26 @@
    cp .env.example .env
    ```
 
+3. Задать права для проекта:
+   ```bash
+   sudo chown -R www-data:www-data .
+   ```
+
 ## Запуск через Docker
 
 1. Запустите команду:
    ```bash
    docker-compose up --build
    ```
-2. Откройте приложение по адресу `http://localhost`.
+
+
+2. Выполните команды внутри контейнера для подготовки приложения:
+   ```bash
+   docker compose exec web python /code/perfumancer/manage.py collectstatic
+   docker compose exec web python /code/perfumancer/manage.py migrate
+   docker compose exec web python /code/perfumancer/manage.py createsuperuser
+   ```
+3. Откройте приложение по адресу `http://localhost`.
 
 ---
 
