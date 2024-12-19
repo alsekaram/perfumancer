@@ -68,6 +68,7 @@ brand_synonyms = {
         "dolce gabbana" "d & g",
         "D & G",
         "dolce gabbana",
+        "dg"
     ],
     "DONNA KARAN": ["donna karan", "dkny", "d.karan", "DONNA KARAN DKNY"],
     "DSQUARED2": ["dsquared2"],
