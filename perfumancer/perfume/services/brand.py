@@ -90,6 +90,7 @@ brand_synonyms = {
     "GRITTI": ["dr. gritti"],
     "GIAN MARCO VENTURI": ["gian marco venturi", "gmv"],
     "GIARDINO BENESSERE": ["GIARDINO BENESSERE (T.TERENZI)"],
+    "GOLDFIELD & BANKS": ["goldfield & banks", 'goldfield banks'],
     "GUCCI": ["gucci"],
     "GUERLAIN": ["guerlain"],
     "HUGO BOSS": ["hugo boss", "boss", "hb boss", "hb", "boss hugo"],
