@@ -85,7 +85,7 @@ def auto_detect_columns(df):
     # Определяем колонку с названием
     for col in df.columns:
         non_empty_values = df[col].dropna()
-        # если все строки и самая длинная строка более 15 символов и более 4 символов
+        # если все поля - строки, и самая длинная строка более 20 символов
         if all(isinstance(v, str) for v in
                non_empty_values) and non_empty_values.str.len().max() > 20:
             name_col = col
@@ -378,25 +378,22 @@ def main() -> bool:
         return False
 
     dir_path = "./" + os.getenv("SAVE_DIR")
-    # directory = os.path.abspath(dir_path)
     result = merge_price_lists(dir_path)
     if result is not None:
         # result.to_excel("combined_price_list.xlsx", index=False)
         logger.info("Добавлено записей: %s", len(result))
-        # logger.info("✅ Объединённый прайс-лист сохранён в файл 'combined_price_list.xlsx'.")
     else:
         return False
 
     return True
 
-#
-# if __name__ == "__main__":
-#     import django
-#
-#     # Установите DJANGO_SETTINGS_MODULE и выполните настройку Django
-#     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "perfumancer.settings")
-#     django.setup()
-#
-#     from ..models import Brand, Product, PriceList, Supplier, ProductBase
-#
-#     main()
+
+if __name__ == "__main__":
+    import django
+
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "perfumancer.settings")
+    django.setup()
+
+    from ..models import Brand, Product, PriceList, Supplier, ProductBase
+
+    main()
