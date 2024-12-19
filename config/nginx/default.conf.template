@@ -6,8 +6,8 @@ upstream uwsgi_app {
 server {
     listen              80;
     listen              443 ssl;
-    ssl_certificate     /code/perfumancer/ssl/perfumancer.crt;
-    ssl_certificate_key /code/perfumancer/ssl/perfumancer.key;
+    ssl_certificate     /code/perfumancer/ssl/fullchain.pem;
+    ssl_certificate_key /code/perfumancer/ssl/privkey.pem;
     server_name         www.perfumancer.ru perfumancer.ru;
     error_log           stderr warn;
     access_log          /dev/stdout main;
