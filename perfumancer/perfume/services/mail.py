@@ -69,7 +69,7 @@ def extract_excel_attachments_from_bodystructure(bodystructure):
     return attachments
 
 
-def fetch_emails_with_excel_attachments(imap, days=1):
+def fetch_emails_with_excel_attachments(imap, days=8):
     """Получение информации о письмах с Excel-вложениями за последние N дней."""
     logger.info(f"Поиск писем с Excel-вложениями за последние %s дней...", days)
     try:
@@ -105,6 +105,7 @@ def fetch_emails_with_excel_attachments(imap, days=1):
 
                     # Определяем наличие вложений Excel
                     attachments = extract_excel_attachments_from_bodystructure(bodystructure)
+                    logger.info("Найдены вложения: %s", attachments)
                     if not attachments:
                         continue
 
@@ -134,6 +135,9 @@ def fetch_emails_with_excel_attachments(imap, days=1):
 def filter_message(messages_data):
     filtered_messages = []
     for message in messages_data:
+        # Если есть тема
+        if not message.get("subject"):
+            continue
         # Проверяем наличие подстроки в теме
         if 'накла' in message.get("subject", "").lower():
             continue  # Пропускаем это письмо
