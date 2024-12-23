@@ -6,6 +6,8 @@ from typing import List
 import pandas as pd
 from pathlib import Path
 from dotenv import load_dotenv
+from openpyxl import load_workbook
+
 
 from ..utils.custom_logging import configure_color_logging
 
@@ -373,6 +375,54 @@ def merge_price_lists(directory_path):
     return combined_df
 
 
+def format_price_list(file_path):
+    # Открытие Excel-файла для изменения ширины колонок
+    workbook = load_workbook(file_path)
+    sheet = workbook.active  # Берём активный лист
+
+    overall_max_length = 50
+
+    # Настройка ширины колонок по содержимому
+    for column in sheet.columns:
+        max_length = 0
+        column_letter = column[0].column_letter  # Получаем букву колонки
+        for cell in column:
+            if cell.value:  # Вычисляем длину содержимого ячейки
+                max_length = max(max_length, len(str(cell.value)))
+        adjusted_width = min(max_length, overall_max_length)
+        sheet.column_dimensions[column_letter].width = adjusted_width
+
+    # Сохранение изменений в файле
+    workbook.save(file_path)
+
+
+def save_combined_price(result, dir_path):
+    # мелтинг всего кроме бренда и имени. Если цена есть
+    result = result.melt(id_vars=["brand", "name"], var_name="price_list", value_name="price").dropna(subset=['price'])
+    # Удаляем 'price_' из имен поставщиков
+    result['supplier'] = result['price_list'].str.replace('price_', '')
+    # берем поставщиков из базы и деламем словарь емаил: имя
+    supplier_dict = {}
+    suppliers = Supplier.objects.all()
+    for supplier in suppliers:
+        supplier_dict[supplier.email] = supplier.name
+
+    print(supplier_dict)
+    # заменяем емайл именем, если оно есть
+    result['supplier'] = result['supplier'].map(supplier_dict)
+
+    # result['supplier'] = result['supplier'].map(supplier_dict)
+
+    # Переименовываем колонки на русский и переставляем их
+    result = result[['supplier', 'brand', 'name', 'price']]
+    result.columns = ['Поставщик', 'Бренд', 'Наименование', 'Цена']
+
+    result.to_excel(Path(dir_path) / "combined_price_list_melted.xlsx", index=False)
+
+    # форматируем excel файл
+    format_price_list(Path(dir_path) / "combined_price_list_melted.xlsx")
+
+
 def main() -> bool:
     if not renew_prices_from_mail():
         return False
@@ -381,6 +431,8 @@ def main() -> bool:
     result = merge_price_lists(dir_path)
     if result is not None:
         # result.to_excel("combined_price_list.xlsx", index=False)
+        save_combined_price(result, dir_path)
+
         logger.info("Добавлено записей: %s", len(result))
     else:
         return False
