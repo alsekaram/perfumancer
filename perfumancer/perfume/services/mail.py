@@ -105,7 +105,7 @@ def fetch_emails_with_excel_attachments(imap, days=8):
 
                     # Определяем наличие вложений Excel
                     attachments = extract_excel_attachments_from_bodystructure(bodystructure)
-                    logger.info("Найдены вложения: %s", attachments)
+                    logger.debug("Найдены вложения: %s", attachments)
                     if not attachments:
                         continue
 
