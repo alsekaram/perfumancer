@@ -13,7 +13,6 @@ from .services.simple_parser import main as update_prices_service
 def renew_prices(request):
     # Логика для обновления прайс-листов
     update_prices()
-
     # После выполнения перенаправляем на страницу списка объектов
     return redirect('/perfume/pricelist/')
 
@@ -26,4 +25,3 @@ def update_prices():
         logging.info("✅ Прайс-листы успешно обновлены.")
     else:
         logging.error("❌ Обновление прайс-листов не удалось.")
-
