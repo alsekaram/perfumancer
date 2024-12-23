@@ -36,5 +36,12 @@
         {% csrf_token %}
         <input type="submit" value="Обновить прайс-листы" name="renew_prices" class="default">
     </form>
+    <!-- Форма для скачивания объединенного прайса только смещаем кнопку к правому краю-->
+    <form method="post" action="{% url 'download_prices' %}" style="margin-left: auto;">
+    {% csrf_token %}
+    <input type="submit" value="Выгрузить всё в Excel" name="download_prices" class="default">
+    </form>
+
+
 </div>
 {% endblock %}

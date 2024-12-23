@@ -5,4 +5,6 @@ from . import views
 urlpatterns = [
     path('', perfume_admin_site.urls),  # Кастомный админ-сайт
     path('renew-prices/', views.renew_prices, name='renew_prices'),
+    path('download-prices/', views.download_prices, name='download_prices'),
+
 ]

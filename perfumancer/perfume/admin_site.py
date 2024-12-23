@@ -34,6 +34,7 @@ class PerfumeAdminSite(AdminSite):
         urls = super().get_urls()
         custom_urls = [
             path('renew-prices/', self.admin_view(views.renew_prices), name='renew_prices'),
+            path('download-prices/', self.admin_view(views.download_prices), name='download_prices'),
         ]
         return custom_urls + urls
 
