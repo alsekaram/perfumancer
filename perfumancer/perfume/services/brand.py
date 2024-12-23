@@ -52,7 +52,7 @@ brand_synonyms = {
     "CERRUTI": ["cerruti"],
     "CHANEL": ["chanel"],
     "CHLOE": ["chloe"],
-    "CHRISTIAN DIOR": ["christian dior", "c.dior", "dior", "c. dior", "c.d.", "cd"],
+    "CHRISTIAN DIOR": ["christian dior", "c.dior", "dior", "c. dior", "c.d.", "cd", "DIOR CD"],
     "CLIVE CHRISTIAN": ["clive christian"],
     "COACH": ["coach"],
     "COMME DES GARCONS": ["comme des garcons"],
