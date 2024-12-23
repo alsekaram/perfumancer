@@ -378,14 +378,14 @@ def merge_price_lists(directory_path):
 def format_price_list(file_path):
     # Открытие Excel-файла для изменения ширины колонок
     workbook = load_workbook(file_path)
-    sheet = workbook.active  # Берём активный лист
+    sheet = workbook.active
 
     overall_max_length = 50
 
     # Настройка ширины колонок по содержимому
     for column in sheet.columns:
         max_length = 0
-        column_letter = column[0].column_letter  # Получаем букву колонки
+        column_letter = column[0].column_letter
         for cell in column:
             if cell.value:  # Вычисляем длину содержимого ячейки
                 max_length = max(max_length, len(str(cell.value)))
@@ -397,21 +397,17 @@ def format_price_list(file_path):
 
 
 def save_combined_price(result, dir_path):
-    # мелтинг всего кроме бренда и имени. Если цена есть
+    # мелтинг
     result = result.melt(id_vars=["brand", "name"], var_name="price_list", value_name="price").dropna(subset=['price'])
-    # Удаляем 'price_' из имен поставщиков
+
     result['supplier'] = result['price_list'].str.replace('price_', '')
-    # берем поставщиков из базы и деламем словарь емаил: имя
+
     supplier_dict = {}
     suppliers = Supplier.objects.all()
     for supplier in suppliers:
         supplier_dict[supplier.email] = supplier.name
 
-    print(supplier_dict)
-    # заменяем емайл именем, если оно есть
     result['supplier'] = result['supplier'].map(supplier_dict)
-
-    # result['supplier'] = result['supplier'].map(supplier_dict)
 
     # Переименовываем колонки на русский и переставляем их
     result = result[['supplier', 'brand', 'name', 'price']]
