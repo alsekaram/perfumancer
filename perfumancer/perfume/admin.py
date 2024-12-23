@@ -34,7 +34,6 @@ class SupplierAdmin(admin.ModelAdmin):
         # extra_context['cl'] = {
         #     'result_count': count,  # Связываем с ключом общего отображения
         # }
-        print(extra_context)
         return super().changelist_view(request, extra_context=extra_context)
 
 
