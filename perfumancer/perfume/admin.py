@@ -42,8 +42,8 @@ class PriceListAdmin(admin.ModelAdmin):
     list_display = ['supplier', 'get_brand', 'product', 'price']
     search_fields = ['product__raw_name', 'product__brand__name']
     ordering = ['product__brand__name', 'supplier', 'product__raw_name']
-    list_filter = ['supplier']  # Ваш кастомный фильтр
-    list_display_links = None  # Отключает ссылки для всех колонок
+    list_filter = ['supplier']
+    list_display_links = None
 
     def get_brand(self, obj):
         return obj.product.brand.name
@@ -54,9 +54,8 @@ class PriceListAdmin(admin.ModelAdmin):
         if extra_context is None:
             extra_context = {}
 
-        extra_context['title'] = _("Общий прайс-лист")  # Или оставьте пустым: ""
-        # Используем правильное namespace
-        url = reverse('perfume:renew_prices')  # Здесь 'perfume' — namespace кастомного админ-сайта
+        extra_context['title'] = _("Общий прайс-лист")
+        url = reverse('perfume:renew_prices')
         extra_context['custom_button'] = format_html(
             '<a class="button btn btn-primary" href="{}">Обновить прайс-листы</a>',
             url
@@ -64,7 +63,6 @@ class PriceListAdmin(admin.ModelAdmin):
         return super().changelist_view(request, extra_context=extra_context)
 
     def has_add_permission(self, request):
-        # Запрещаем отображение кнопки "Добавить" на странице "Прайс-листы"
         return False
 
     def get_actions(self, request):
