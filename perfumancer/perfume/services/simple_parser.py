@@ -8,7 +8,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from openpyxl import load_workbook
 
-
 from ..utils.custom_logging import configure_color_logging
 
 from ..models import Brand, Product, PriceList, Supplier, ProductBase
@@ -20,6 +19,8 @@ from .mail import main_mail as renew_prices_from_mail
 logger = logging.getLogger(__name__)
 configure_color_logging(level="INFO")
 load_dotenv()
+
+USDRUB = 120
 
 
 def clean_name(name, brand):
@@ -87,9 +88,9 @@ def auto_detect_columns(df):
     # Определяем колонку с названием
     for col in df.columns:
         non_empty_values = df[col].dropna()
-        # если все поля - строки, и самая длинная строка более 20 символов
+        # если все поля - строки, и самая длинная строка более 30 символов
         if all(isinstance(v, str) for v in
-               non_empty_values) and non_empty_values.str.len().max() > 20:
+               non_empty_values) and non_empty_values.str.len().max() > 30:
             name_col = col
             break
 
@@ -104,12 +105,12 @@ def auto_detect_columns(df):
     for col in df.columns[df.columns.get_loc(name_col) + 1:]:
         non_empty_values = df[col].dropna()
 
-        # Проверяем, что хотя бы 50% значений заполнены, числовые и не равны нулю и меньше 10000
+        # Проверяем, что хотя бы 50% значений заполнены, числовые и не равны нулю и меньше 5000
         numeric_values = pd.to_numeric(non_empty_values, errors="coerce")
         if (
                 numeric_values.notna().mean() > 0.5
                 and numeric_values.mean() > 1
-                and numeric_values.max() < 10000
+                and numeric_values.max() < 5000 * USDRUB
         ):
             price_col = col
             break
@@ -186,6 +187,11 @@ def process_price_list(file_path):
     df[price_col] = pd.to_numeric(df[price_col], errors="coerce")
     # Убираем строки без цены
     df = df.dropna(subset=[price_col]).reset_index(drop=True)
+    if df[price_col].max() > 5000:
+        logger.debug("⚠️ Вероятно цена в рублях: максимальное значение цены больше 5000: %s",
+                     df[price_col].max())
+        # приводим цены к доллару
+        df[price_col] = df[price_col] / USDRUB
 
     result_columns = ["brand", name_col, price_col]
     df[name_col] = df.apply(lambda x: clean_name(x[name_col], x["brand"]), axis=1)
@@ -194,7 +200,6 @@ def process_price_list(file_path):
 
     logger.debug(f"Обработка завершена для файла: {file_path}, колонки: {final_df.columns}")  # Было: print(...)
     return final_df
-
 
 
 def save_price_lists(df, filename):
