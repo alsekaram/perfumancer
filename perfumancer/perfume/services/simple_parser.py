@@ -10,7 +10,7 @@ from openpyxl import load_workbook
 
 from ..utils.custom_logging import configure_color_logging
 
-from ..models import Brand, Product, PriceList, Supplier, ProductBase
+from ..models import Brand, Product, PriceList, Supplier, ProductBase, CurrencyRate
 
 from .brand import get_standard_brand_fuzzy, get_brand_aliases, get_brand_from_name
 from .xls_formatter import format_xls_to_xlsx
@@ -20,8 +20,15 @@ logger = logging.getLogger(__name__)
 configure_color_logging(level="INFO")
 load_dotenv()
 
-USDRUB = 120
 
+def get_currency_rate(currency_code):
+    try:
+        rate = CurrencyRate.objects.get(currency=currency_code).rate
+        print(f"USDRUB: {rate}")
+        return rate
+    except CurrencyRate.DoesNotExist:
+        logger.warning("Курс валюты для %s не найден в базе данных, возвращаем курс по умолчанию", currency_code)
+        return 120
 
 def clean_name(name, brand):
     # по ключу из get_standard_brand получаем стандартное название бренда и меняем то что есть в названии на стандартное
@@ -110,7 +117,7 @@ def auto_detect_columns(df):
         if (
                 numeric_values.notna().mean() > 0.5
                 and numeric_values.mean() > 1
-                and numeric_values.max() < 5000 * USDRUB
+                and numeric_values.max() < 5000 * get_currency_rate("USD")
         ):
             price_col = col
             break
@@ -190,8 +197,12 @@ def process_price_list(file_path):
     if df[price_col].max() > 5000:
         logger.debug("⚠️ Вероятно цена в рублях: максимальное значение цены больше 5000: %s",
                      df[price_col].max())
+
+        # получаем курс валюты из БД c приведением к Decimal
+        usd_rub = pd.to_numeric(get_currency_rate("USD"), errors="coerce")
+
         # приводим цены к доллару
-        df[price_col] = df[price_col] / USDRUB
+        df[price_col] = df[price_col] / usd_rub
 
     result_columns = ["brand", name_col, price_col]
     df[name_col] = df.apply(lambda x: clean_name(x[name_col], x["brand"]), axis=1)
