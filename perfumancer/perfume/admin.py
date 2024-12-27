@@ -78,7 +78,9 @@ class CurrencyRateAdmin(admin.ModelAdmin):
 
     def get_model_perms(self, request):
         # Если есть одна запись - показываем модель, иначе скрываем
-        if CurrencyRate.objects.count() == 1:
+        if CurrencyRate.objects.count() == 0:
+            CurrencyRate.objects.create(currency="USD", rate=0)
+        elif CurrencyRate.objects.count() == 1:
             return super().get_model_perms(request)
         return {}
 
