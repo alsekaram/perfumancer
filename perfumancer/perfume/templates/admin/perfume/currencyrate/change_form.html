@@ -1,0 +1,13 @@
+{% extends "admin/change_form.html" %}
+
+{% block object-tools-items %}
+    {% if not show_history %}
+        {% for item in object_tools %}
+            {% if "history" not in item.url %}
+                {{ item.render }}
+            {% endif %}
+        {% endfor %}
+    {% else %}
+        {{ block.super }}
+    {% endif %}
+{% endblock %}
