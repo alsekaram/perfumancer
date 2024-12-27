@@ -108,3 +108,16 @@ class PriceList(models.Model):
         return self.product.brand.name
     get_brand.short_description = "Бренд"
 
+
+# простая модель для хранения курса валюты
+class CurrencyRate(models.Model):
+    currency = models.CharField(max_length=3, unique=True, verbose_name="Валюта")
+    rate = models.DecimalField(max_digits=8, decimal_places=2, verbose_name="Курс")
+
+    class Meta:
+        verbose_name = "Курсы валют"
+        verbose_name_plural = "Курс USD"
+
+    def __str__(self):
+        return f"Курс {self.currency}: {self.rate} RUB"  # Курс USD 120,00
+
