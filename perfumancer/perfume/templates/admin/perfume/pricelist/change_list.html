@@ -1,11 +1,9 @@
 {% extends "admin/change_list.html" %}
 {% load static %}
 
-
 {% block sidebar %}
     <!-- Удаляем весь блок sidebar -->
 {% endblock %}
-
 
 {% block object-tools %}
     <!-- Удаляем все содержимое блока object-tools -->
@@ -14,9 +12,6 @@
 {% block content_title %}
     <!-- Удаляем заголовок страницы -->
 {% endblock %}
-
-
-
 
 {% block search %}
 <div id="toolbar" style="display: flex; align-items: center;">
@@ -41,7 +36,58 @@
     {% csrf_token %}
     <input type="submit" value="Выгрузить всё в Excel" name="download_prices" class="default">
     </form>
-
-
 </div>
 {% endblock %}
+
+
+{% block pagination %}
+<div class="paginator">
+    {% if cl.paginator.num_pages > 1 %}
+        <span class="step-links">
+
+            {% if cl.page_num > 0 %}
+                <a href="?{% if cl.params %}{{ cl.params|urlencode }}&{% endif %}p=0" class="button">1</a>
+            {% endif %}
+
+            {% if cl.page_num > 10 %}
+                <a href="?{% if cl.params %}{{ cl.params|urlencode }}&{% endif %}p={{ cl.page_num|add:'-10' }}" class="button">&laquo; -10</a>
+            {% endif %}
+
+            {% if cl.page_num > 0 %}
+                <a href="?{% if cl.params %}{{ cl.params|urlencode }}&{% endif %}p={{ cl.page_num|add:'-1' }}" class="button">&#8592; Предыдущая</a>
+            {% endif %}
+
+            <span class="current">
+                Страница {{ cl.page_num|add:"1" }} из {{ cl.paginator.num_pages }}
+            </span>
+
+            {% if cl.page_num < cl.paginator.num_pages|add:'-1' %}
+                <a href="?{% if cl.params %}{{ cl.params|urlencode }}&{% endif %}p={{ cl.page_num|add:'1' }}" class="button">Следующая &#8594;</a>
+            {% endif %}
+
+            {% if cl.page_num|add:'10' < cl.paginator.num_pages %}
+                <a href="?{% if cl.params %}{{ cl.params|urlencode }}&{% endif %}p={{ cl.page_num|add:'10' }}" class="button">+10 &raquo;</a>
+            {% endif %}
+
+            {% if cl.page_num < cl.paginator.num_pages|add:'-1' %}
+                <a href="?{% if cl.params %}{{ cl.params|urlencode }}&{% endif %}p={{ cl.paginator.num_pages|add:'-1' }}" class="button">{{ cl.paginator.num_pages }}</a>
+            {% endif %}
+
+            <!-- Поле ввода страницы с кнопкой -->
+            <form method="get" style="display: inline-block; margin-left: 10px;">
+                {% for key, value in cl.params.items %}
+                    {% if key != 'p' %}
+                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                    {% endif %}
+                {% endfor %}
+                <input type="number" name="p" min="0" max="{{ cl.paginator.num_pages|add:'-1' }}" value="{{ cl.page_num }}" style="width: 50px;">
+                <button type="submit" class="button">Перейти</button>
+            </form>
+
+        </span>
+    {% endif %}
+</div>
+{% endblock %}
+
+
+
