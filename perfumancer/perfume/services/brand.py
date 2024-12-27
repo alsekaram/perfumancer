@@ -27,7 +27,7 @@ brand_synonyms = {
     ],
     "AMOUAGE": ["amouage"],
     "ANGEL SCHLESSER": ["angel schlesser"],
-    "ANTONIO BANDERAS": ["antonio banderas"],
+    "ANTONIO BANDERAS": ["antonio banderas", "a. banderas", "a.banderas", "ant. banderas"],
     "ARABESQUE": ["arabesque"],
     "ARAMIS": ["aramis"],
     "ARMAF": ["armaf"],
