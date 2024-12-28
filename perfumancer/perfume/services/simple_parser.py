@@ -99,18 +99,16 @@ def auto_detect_columns(df):
     # Определяем колонку с названием
     for col in df.columns:
         non_empty_values = df[col].dropna()
-        # если все поля - строки, и самая длинная строка более 30 символов
-        if all(isinstance(v, str) for v in non_empty_values):
 
-            # Пропускаем строки, похожие на формулы Excel или UUID
-            if non_empty_values.str.contains(excel_formula_pattern, regex=True).any() or \
-                    non_empty_values.str.contains(uuid_pattern, regex=True).any():
-                continue
+        # Пропускаем строки, похожие на формулы Excel или UUID
+        if non_empty_values.str.contains(excel_formula_pattern, regex=True).any() or \
+                non_empty_values.str.contains(uuid_pattern, regex=True).any():
+            continue
 
-            # Проверяем длину строк
-            if non_empty_values.str.len().max() > 30:
-                name_col = col
-                break
+        # Проверяем длину строк - самая длинная строка более 30 символов
+        if non_empty_values.str.len().max() > 30:
+            name_col = col
+            break
 
     if not name_col:
         logger.warning("Не удалось определить колонку с названием.")
@@ -447,6 +445,7 @@ def save_combined_price(result, dir_path):
 
 
 def main() -> bool:
+    # Идем на почту
     if not renew_prices_from_mail():
         return False
 
