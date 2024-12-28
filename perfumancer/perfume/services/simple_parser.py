@@ -92,14 +92,25 @@ def auto_detect_columns(df):
         if df[col].dropna().shape[0] < 5:
             df.drop(col, axis=1, inplace=True)
 
+    # Регулярные выражения для формул Excel и UUID
+    excel_formula_pattern = r'^=[A-Z]+\d+C\d+(?:[+\-*\/][A-Z]+\d+C\d+)*$'
+    uuid_pattern = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+
     # Определяем колонку с названием
     for col in df.columns:
         non_empty_values = df[col].dropna()
         # если все поля - строки, и самая длинная строка более 30 символов
-        if all(isinstance(v, str) for v in
-               non_empty_values) and non_empty_values.str.len().max() > 30:
-            name_col = col
-            break
+        if all(isinstance(v, str) for v in non_empty_values):
+
+            # Пропускаем строки, похожие на формулы Excel или UUID
+            if non_empty_values.str.contains(excel_formula_pattern, regex=True).any() or \
+                    non_empty_values.str.contains(uuid_pattern, regex=True).any():
+                continue
+
+            # Проверяем длину строк
+            if non_empty_values.str.len().max() > 30:
+                name_col = col
+                break
 
     if not name_col:
         logger.warning("Не удалось определить колонку с названием.")
@@ -440,6 +451,7 @@ def main() -> bool:
         return False
 
     dir_path = "./" + os.getenv("SAVE_DIR")
+    # process_file(Path(dir_path) / "f.sanakov@1st-original.ru.xlsx")
     result = merge_price_lists(dir_path)
     if result is not None:
         # result.to_excel("combined_price_list.xlsx", index=False)
@@ -455,9 +467,9 @@ def main() -> bool:
 if __name__ == "__main__":
     import django
 
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "perfumancer.settings")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "perfumancer.settings.local")
     django.setup()
 
-    from ..models import Brand, Product, PriceList, Supplier, ProductBase
+    from ..models import Brand, Product, PriceList, Supplier, ProductBase, CurrencyRate
 
     main()
