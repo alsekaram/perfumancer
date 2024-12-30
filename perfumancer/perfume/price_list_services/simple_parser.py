@@ -230,7 +230,7 @@ def save_price_lists(df, filename):
     :param filename: название файла
     """
     brand_dict = get_brand_id_dict()
-    logger.debug("Сохранение прайс-листа в базу данных...")
+    logger.info("Сохранение прайс-листа %s в базу данных...", filename)
 
     supplier, created = Supplier.objects.get_or_create(email=filename, defaults={"name": filename})
     if not supplier:
@@ -446,8 +446,8 @@ def save_combined_price(result, dir_path):
 
 def main() -> bool:
     # Идем на почту
-    if not renew_prices_from_mail():
-        return False
+    # if not renew_prices_from_mail():
+    #     return False
 
     dir_path = "./" + os.getenv("SAVE_DIR")
     # process_file(Path(dir_path) / "f.sanakov@1st-original.ru.xlsx")
