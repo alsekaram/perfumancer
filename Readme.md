@@ -36,9 +36,9 @@
 
 2. Выполните команды внутри контейнера для подготовки приложения:
    ```bash
-   docker compose exec web python /code/perfumancer/manage.py collectstatic
-   docker compose exec web python /code/perfumancer/manage.py migrate
-   docker compose exec web python /code/perfumancer/manage.py createsuperuser
+   docker-compose exec web python /code/perfumancer/manage.py collectstatic
+   docker-compose exec web python /code/perfumancer/manage.py migrate
+   docker-compose exec web python /code/perfumancer/manage.py createsuperuser
    ```
 3. Откройте приложение по адресу `http://localhost`.
 
