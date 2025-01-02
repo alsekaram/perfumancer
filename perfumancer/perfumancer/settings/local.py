@@ -11,3 +11,5 @@ DATABASES = {
 
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_RESULT_EXPIRES = 3600  # Результаты хранятся 1 час

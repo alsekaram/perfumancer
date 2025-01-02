@@ -15,7 +15,6 @@
 
 {% block search %}
 <div id="toolbar" style="display: flex; align-items: center;">
-    <!-- Форма поиска -->
     <form id="changelist-search" method="get" style="margin-right: 8px;">
         <div style="display: flex; align-items: center;">
             <label for="searchbar" style="margin-right: 8px;">
@@ -26,17 +25,124 @@
         </div>
     </form>
 
-    <!-- Форма для обновления прайс-листов -->
-    <form method="post" action="{% url 'renew_prices' %}">
+    <form method="post" action="{% url 'renew_prices' %}" id="renew-form">
         {% csrf_token %}
-        <input type="submit" value="Обновить прайс-листы" name="renew_prices" class="default">
+        <input type="submit" value="Обновить прайс-листы" id="renew-button" class="default">
     </form>
-    <!-- Форма для скачивания объединенного прайса только смещаем кнопку к правому краю-->
+
     <form method="post" action="{% url 'download_prices' %}" style="margin-left: auto;">
-    {% csrf_token %}
-    <input type="submit" value="Выгрузить всё в Excel" name="download_prices" class="default">
+        {% csrf_token %}
+        <input type="submit" value="Выгрузить всё в Excel" name="download_prices" class="default">
     </form>
 </div>
+
+<script>
+    document.getElementById('renew-form').onsubmit = function(e) {
+        e.preventDefault();
+        var button = document.getElementById('renew-button');
+
+        // Проверяем, выполняется ли уже задача
+        var taskId = localStorage.getItem('task_id');
+        if (taskId) {
+            alert('Задача уже выполняется. Дождитесь завершения.');
+            return;
+        }
+
+        startButtonAnimation(button);  // Запускаем анимацию текста кнопки
+        localStorage.setItem('button_text', button.value);  // Сохраняем текст кнопки
+
+        fetch('{% url "renew_prices" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        }).then(response => {
+            if (!response.ok) {
+                stopButtonAnimation(button);
+                alert('Ошибка: задача уже выполняется.');
+                throw new Error('Задача уже выполняется');
+            }
+            return response.json();
+        }).then(data => {
+            var taskId = data.task_id;
+            localStorage.setItem('task_id', taskId);  // Сохраняем task_id
+            startTaskPolling(taskId);  // Запускаем проверку
+        }).catch(error => {
+            console.error('Ошибка:', error);
+        });
+    };
+
+    // Функция для анимации текста кнопки
+    var animationInterval;
+
+    function startButtonAnimation(button) {
+        var states = ['Обновление', 'Обновление .', 'Обновление ..', 'Обновление ...'];
+        var i = 0;
+
+        if (animationInterval) {
+            clearInterval(animationInterval);
+        }
+
+        animationInterval = setInterval(function() {
+            button.value = states[i % states.length];
+            localStorage.setItem('button_text', button.value);
+            i++;
+        }, 500);  // Меняем состояние каждые 500 мс
+    }
+
+    function stopButtonAnimation(button) {
+        clearInterval(animationInterval);
+        button.value = 'Обновить прайс-листы';
+        localStorage.removeItem('button_text');
+    }
+
+    // Проверка задачи при загрузке страницы
+    window.onload = function() {
+        var taskId = localStorage.getItem('task_id');
+        var buttonText = localStorage.getItem('button_text');
+        var button = document.getElementById('renew-button');
+
+        if (buttonText) {
+            button.value = buttonText;
+        }
+
+        if (taskId) {
+            startButtonAnimation(button);
+            startTaskPolling(taskId);
+        }
+    };
+
+    // Проверка состояния задачи
+    function startTaskPolling(taskId) {
+        var interval = setInterval(function() {
+            fetch(`/task_status/${taskId}/`)
+            .then(response => {
+                if (response.status === 404) {
+                    localStorage.removeItem('task_id');
+                    clearInterval(interval);
+                    stopButtonAnimation(document.getElementById('renew-button'));
+                    return;
+                }
+                return response.json();
+            })
+            .then(data => {
+                var button = document.getElementById('renew-button');
+                if (data && data.status === 'SUCCESS') {
+                    stopButtonAnimation(button);
+                    localStorage.removeItem('task_id');
+                    clearInterval(interval);
+                } else if (data && data.status === 'FAILURE') {
+                    button.value = 'Ошибка при обновлении';
+                    localStorage.removeItem('task_id');
+                    clearInterval(interval);
+                }
+            }).catch((error) => {
+                console.error('Error fetching task status:', error);
+                clearInterval(interval);
+                stopButtonAnimation(document.getElementById('renew-button'));
+            });
+        }, 3000);  // Проверяем каждые 3 секунды
+    }
+</script>
+
 {% endblock %}
-
-

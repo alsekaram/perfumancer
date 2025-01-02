@@ -1,17 +1,38 @@
-import os
-from pathlib import Path
-
-from django.http import HttpResponse, Http404
+from django.core.cache import cache
+from django.http import JsonResponse, HttpResponse, Http404
 from django.shortcuts import redirect
-
 from .tasks import update_prices_task
+from celery.result import AsyncResult
+from pathlib import Path
+import os
+import logging
 
+logger = logging.getLogger(__name__)
 
 def renew_prices(request):
-    # Логика для обновления прайс-листов
-    update_prices_task.delay()
-    # После выполнения перенаправляем на страницу списка объектов
+    if request.method == 'POST':
+        # Проверяем блокировку в кэше
+        if cache.get('renew_prices_task_lock'):
+            return JsonResponse({'error': 'Задача уже выполняется'}, status=400)
+
+        # Устанавливаем блокировку
+        cache.set('renew_prices_task_lock', True, timeout=3600)  # 1 час
+
+        # Запускаем задачу
+        task = update_prices_task.delay()
+        logger.info(f"Запущена задача обновления цен: {task.id}")
+        return JsonResponse({'task_id': task.id})
+
     return redirect('/perfume/pricelist/')
+
+
+def task_status(request, task_id):
+    result = AsyncResult(task_id)
+    logger.info(f"Статус задачи {task_id}: {result.state}")
+    if result.state in ['PENDING', 'FAILURE']:
+        return JsonResponse({'status': 'NOT FOUND'}, status=404)
+
+    return JsonResponse({'status': result.state, 'result': str(result.result)})
 
 
 def download_prices(request):
@@ -22,6 +43,7 @@ def download_prices(request):
     file_path = dir_path / "combined_price_list_melted.xlsx"
 
     if not file_path.exists():
+        logger.error("Файл для скачивания не найден.")
         return redirect('/perfume/pricelist/')
 
     try:
@@ -32,6 +54,6 @@ def download_prices(request):
             )
             response['Content-Disposition'] = 'attachment; filename="price_file.xlsx"'
             return response
-
     except Exception as e:
+        logger.exception(f"Ошибка при загрузке файла: {e}")
         raise Http404(e)
