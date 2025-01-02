@@ -16,7 +16,7 @@ def renew_prices(request):
             return JsonResponse({'error': 'Задача уже выполняется'}, status=400)
 
         # Устанавливаем блокировку
-        cache.set('renew_prices_task_lock', True, timeout=3600)  # 1 час
+        cache.set('renew_prices_task_lock', True, timeout=160)  # 1 час
 
         # Запускаем задачу
         task = update_prices_task.delay()
@@ -31,7 +31,9 @@ def task_status(request, task_id):
     logger.info(f"Статус задачи {task_id}: {result.state}")
     if result.state in ['PENDING', 'FAILURE']:
         return JsonResponse({'status': 'NOT FOUND'}, status=404)
-
+    #удаляем из кеша блокировку
+    if cache.get('renew_prices_task_lock'):
+        cache.delete('renew_prices_task_lock')
     return JsonResponse({'status': result.state, 'result': str(result.result)})
 
 

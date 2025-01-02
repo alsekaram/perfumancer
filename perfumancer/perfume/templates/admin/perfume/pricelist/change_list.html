@@ -27,8 +27,7 @@
 
     <form method="post" action="{% url 'renew_prices' %}" id="renew-form">
         {% csrf_token %}
-        <input type="submit" value="Обновить прайс-листы" id="renew-button" class="default">
-    </form>
+        <input type="submit" value="Обновить прайс-листы" id="renew-button" class="default" style="width: auto;">    </form>
 
     <form method="post" action="{% url 'download_prices' %}" style="margin-left: auto;">
         {% csrf_token %}
@@ -40,6 +39,9 @@
     document.getElementById('renew-form').onsubmit = function(e) {
         e.preventDefault();
         var button = document.getElementById('renew-button');
+
+        document.body.focus();
+
 
         // Проверяем, выполняется ли уже задача
         var taskId = localStorage.getItem('task_id');
@@ -144,5 +146,10 @@
         }, 3000);  // Проверяем каждые 3 секунды
     }
 </script>
-
+<style>
+    #renew-button {
+        min-width: 150px; /* Подстраивайтесь под максимальную длину текста */
+        text-align: left;
+    }
+</style>
 {% endblock %}
