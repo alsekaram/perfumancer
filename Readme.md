@@ -44,6 +44,21 @@
 
 ---
 
+## Локальный запуск проекта
+
+Для локального запуска выполните следующие действия:
+
+1. Запустите сервер приложения:
+   ```bash
+   python perfumancer/manage.py runserver --settings=perfumancer.settings.local
+   ```
+
+2. В другом окне терминала (выполните из корневой директории проекта):
+   ```bash
+   cd perfumancer
+   celery -A perfumancer worker --loglevel=info
+   ```
+
 ## Контакты
 
 Вопросы? [git@awl.su](mailto:git@awl.su)
