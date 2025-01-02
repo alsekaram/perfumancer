@@ -26,11 +26,13 @@ services:
     restart: always
     volumes:
       - .:/code
+    working_dir: /code/perfumancer
     environment:
       - DJANGO_SETTINGS_MODULE=perfumancer.settings.prod
     depends_on:
       - redis
       - web
+
 
   redis:
     image: redis:latest
