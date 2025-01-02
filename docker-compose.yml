@@ -1,14 +1,14 @@
 services:
-
   web:
     build: .
     command: ["uwsgi", "--ini", "/code/config/uwsgi/uwsgi.ini"]
     restart: always
     volumes:
       - .:/code
-
     environment:
       - DJANGO_SETTINGS_MODULE=perfumancer.settings.prod
+    depends_on:
+      - redis
 
   nginx:
     image: nginx:1.25.5
@@ -19,3 +19,24 @@ services:
     ports:
       - "80:80"
       - "443:443"
+
+  celery:
+    build: .
+    command: celery -A perfumancer worker -l info
+    restart: always
+    volumes:
+      - .:/code
+    environment:
+      - DJANGO_SETTINGS_MODULE=perfumancer.settings.prod
+    depends_on:
+      - redis
+      - web
+
+  redis:
+    image: redis:latest
+    restart: always
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

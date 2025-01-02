@@ -1,6 +1,7 @@
 asgiref==3.8.1
 colorlog==6.9.0
 Django==5.1.4
+celery==5.4.0
 et_xmlfile==2.0.0
 numpy==2.2.0
 openpyxl==3.1.5
@@ -16,3 +17,4 @@ tzdata==2024.2
 xlrd==2.0.1
 uwsgi==2.0.25.1
 python-decouple==3.8
+redis==5.2.1

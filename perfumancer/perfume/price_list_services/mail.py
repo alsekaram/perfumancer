@@ -157,7 +157,7 @@ def filter_message(messages_data):
 
 
 def save_attachments(imap, emails):
-    dir_path = "./" + os.getenv("SAVE_DIR")
+    dir_path = "../" + os.getenv("SAVE_DIR")
 
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)

@@ -4,12 +4,12 @@ from pathlib import Path
 from django.http import HttpResponse, Http404
 from django.shortcuts import redirect
 
-from .services import update_prices
+from .tasks import update_prices_task
 
 
 def renew_prices(request):
     # Логика для обновления прайс-листов
-    update_prices()
+    update_prices_task.delay()
     # После выполнения перенаправляем на страницу списка объектов
     return redirect('/perfume/pricelist/')
 

@@ -8,7 +8,7 @@ def format_xls_to_xlsx(directory_path: str) -> bool:
     """
     Конвертирует все файлы .xls в указанной директории в .xlsx.
     """
-    target_dir = Path("./" + os.getenv("SAVE_DIR"))
+    target_dir = Path(directory_path)
 
 
     # Проверяем существование директории

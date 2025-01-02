@@ -446,10 +446,11 @@ def save_combined_price(result, dir_path):
 
 def main() -> bool:
     # Идем на почту
-    # if not renew_prices_from_mail():
-    #     return False
+    if not renew_prices_from_mail():
+        return False
 
-    dir_path = "./" + os.getenv("SAVE_DIR")
+    dir_path = "../" + os.getenv("SAVE_DIR")
+    logger.info("Директория: %s", dir_path)
     # process_file(Path(dir_path) / "f.sanakov@1st-original.ru.xlsx")
     result = merge_price_lists(dir_path)
     if result is not None:
