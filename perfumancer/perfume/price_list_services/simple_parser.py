@@ -173,28 +173,40 @@ def process_price_list(file_path):
 
     # Обработка брендов
     df["brand"] = None
-    current_brand = None
-    brands = []
+    # current_brand = None
 
+    df["brand"] = df["brand"].replace(
+        to_replace=r"^\s*(NAN|nan|NaN)\s*$", value=pd.NA, regex=True
+    )
+
+    brands = []
     for i, row in df.iterrows():
         name = row[name_col]
         price = row[price_col]
 
-        # Определяем, является ли строка брендом
         if pd.isna(price) and name.strip():
             current_brand = name.strip().replace("\xa0", " ")
             current_brand = get_standard_brand_fuzzy(current_brand)
+        else:
+            current_brand = None
+
         brands.append(current_brand)
 
-    df["brand"] = brands
+    if len(brands) != len(df):
+        logger.warning(f"Длина brands ({len(brands)}) не совпадает с длиной df ({len(df)}), корректируем.")
+        brands = brands[:len(df)] if len(brands) > len(df) else brands + [None] * (len(df) - len(brands))
 
+    df["brand"] = brands
     # Убираем строки без названия
+
     df = df.dropna(subset=[name_col]).reset_index(drop=True)
 
     # Получаем бренд из имени
     df["brand"] = df.apply(
         lambda x: (
-            get_brand_from_name(x[name_col]) if pd.isna(x["brand"]) or x["brand"] == "NAN" else x["brand"]
+            get_brand_from_name(x[name_col])
+            if pd.isna(x["brand"]) or str(x["brand"]).strip().upper() == "NAN"
+            else x["brand"]
         ),
         axis=1,
     )
@@ -383,10 +395,11 @@ def merge_price_lists(directory_path):
     all_prices = {}
 
     for file_path in file_paths:
-        df = process_file(file_path)
-        if df is not None:
-            all_data.append(df)
-            all_prices[file_path.stem] = df
+        # if 'nicheperfume' in str(file_path):
+            df = process_file(file_path)
+            if df is not None:
+                all_data.append(df)
+                all_prices[file_path.stem] = df
 
     if not all_data:
         logger.warning("Не найдено подходящих данных для объединения.")
