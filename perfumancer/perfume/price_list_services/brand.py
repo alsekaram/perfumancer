@@ -151,7 +151,7 @@ brand_synonyms = {
         "y.saint-laurent",
     ],
     "YOHJI YAMAMOTO": ["yohji yamamoto", "yohjii yamamoto", "yohji"],
-    "ZADIG & VOLTAIRE": ["zadig & voltaire", "zadig"],
+    "ZADIG & VOLTAIRE": ["zadig & voltair", "zadig&voltaire", "zadig"],
     "ZARKOPERFUME": ["zarkoperfume"],
     "ZLATAN IBRAHIMOVIC": ["zlatan ibrahimovic", "zlatan", "ibrahimovic"],
 }
