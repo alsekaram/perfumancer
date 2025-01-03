@@ -14,7 +14,7 @@
 {% endblock %}
 
 {% block search %}
-<div id="toolbar" style="display: flex; align-items: center;">
+<div id="toolbar" style="display: flex; flex-wrap: wrap; align-items: center;">
     <form id="changelist-search" method="get" style="margin-right: 8px;">
         <div style="display: flex; align-items: center;">
             <label for="searchbar" style="margin-right: 8px;">
@@ -25,11 +25,14 @@
         </div>
     </form>
 
+    <!-- Форма обновления прайс-листов -->
     <form method="post" action="{% url 'renew_prices' %}" id="renew-form">
         {% csrf_token %}
-        <input type="submit" value="Обновить прайс-листы" id="renew-button" class="default" style="width: auto;">    </form>
+        <input type="submit" value="Обновить прайс-листы" id="renew-button" class="default">
+    </form>
 
-    <form method="post" action="{% url 'download_prices' %}" style="margin-left: auto;">
+    <!-- Форма выгрузки прайс-листов -->
+    <form method="post" action="{% url 'download_prices' %}" style="margin-left: 8px;">
         {% csrf_token %}
         <input type="submit" value="Выгрузить всё в Excel" name="download_prices" class="default">
     </form>
@@ -40,18 +43,15 @@
         e.preventDefault();
         var button = document.getElementById('renew-button');
 
-        document.body.focus();
-
-
-        // Проверяем, выполняется ли уже задача
+        // Проверка активной задачи
         var taskId = localStorage.getItem('task_id');
         if (taskId) {
             alert('Задача уже выполняется. Дождитесь завершения.');
             return;
         }
 
-        startButtonAnimation(button);  // Запускаем анимацию текста кнопки
-        localStorage.setItem('button_text', button.value);  // Сохраняем текст кнопки
+        startButtonAnimation(button);  // Запуск анимации текста кнопки
+        localStorage.setItem('button_text', button.value);  // Сохранение текста кнопки
 
         fetch('{% url "renew_prices" %}', {
             method: 'POST',
@@ -67,14 +67,14 @@
             return response.json();
         }).then(data => {
             var taskId = data.task_id;
-            localStorage.setItem('task_id', taskId);  // Сохраняем task_id
-            startTaskPolling(taskId);  // Запускаем проверку
+            localStorage.setItem('task_id', taskId);  // Сохранение task_id
+            startTaskPolling(taskId);  // Запуск проверки
         }).catch(error => {
             console.error('Ошибка:', error);
         });
     };
 
-    // Функция для анимации текста кнопки
+    // Анимация текста кнопки
     var animationInterval;
 
     function startButtonAnimation(button) {
@@ -89,7 +89,7 @@
             button.value = states[i % states.length];
             localStorage.setItem('button_text', button.value);
             i++;
-        }, 500);  // Меняем состояние каждые 500 мс
+        }, 500);
     }
 
     function stopButtonAnimation(button) {
@@ -114,7 +114,6 @@
         }
     };
 
-    // Проверка состояния задачи
     function startTaskPolling(taskId) {
         var interval = setInterval(function() {
             fetch(`/task_status/${taskId}/`)
@@ -143,10 +142,67 @@
                 clearInterval(interval);
                 stopButtonAnimation(document.getElementById('renew-button'));
             });
-        }, 3000);  // Проверяем каждые 3 секунды
+        }, 3000);
     }
 </script>
+
 <style>
+    #toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 10px;
+    }
+
+    .toolbar-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    #toolbar form {
+        flex: 0 1 auto;
+        display: flex;
+        align-items: center;
+    }
+
+    #changelist-search {
+        flex: 1 1 auto;
+    }
+
+    #changelist-search input[type="text"] {
+        flex: 1;
+        min-width: 300px;
+    }
+
+    #changelist-search input[type="submit"] {
+        margin-left: 10px;  /* Отступ между полем поиска и кнопкой "Найти" */
+    }
+
+    .toolbar-actions form {
+        flex: 0 1 auto;
+    }
+
+    @media (max-width: 768px) {
+        #toolbar {
+            flex-direction: column;
+        }
+
+        #changelist-search {
+            margin-bottom: 10px;
+            width: 100%;
+        }
+
+        .toolbar-actions {
+            flex-direction: column;
+            width: 100%;
+        }
+
+        .toolbar-actions form {
+            width: 100%;
+        }
+    }
     #renew-button {
         min-width: 150px; /* Подстраивайтесь под максимальную длину текста */
         text-align: left;
