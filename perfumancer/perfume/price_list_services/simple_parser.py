@@ -95,7 +95,7 @@ def auto_detect_columns(df):
             continue
 
         # Проверяем длину строк - самая длинная строка более 30 символов
-        if non_empty_values.str.len().max() > 30:
+        if non_empty_values.iloc[10:].astype(str).str.len().max() > 30:
             name_col = col
             break
 
@@ -143,8 +143,8 @@ def auto_detect_columns(df):
 def process_price_list(file_path):
     """Обрабатывает один прайс-лист, выделяет торговые марки и сопоставляет их с товарами."""
     logger.info(
-        f"Чтение файла: {file_path}"
-    )  # Было: print(f"Чтение файла: {file_path}")
+        "Чтение файла: %s", file_path
+    )
     df = pd.read_excel(file_path, engine="openpyxl", header=None)
     if len(df) < 30:
         logger.warning(
@@ -483,8 +483,8 @@ def save_combined_price(result, dir_path):
 
 def main() -> bool:
     # Идем на почту
-    # if not renew_prices_from_mail():
-    #     return False
+    if not renew_prices_from_mail():
+        return False
 
     dir_path = "../" + os.getenv("SAVE_DIR")
     logger.info("Директория: %s", dir_path)
