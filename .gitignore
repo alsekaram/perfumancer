@@ -133,6 +133,9 @@ dmypy.json
 # pycharm
 .idea/
 
+# vscode
+.vscode/
+
 appeals_text.json
 
 # General
