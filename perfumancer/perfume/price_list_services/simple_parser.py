@@ -396,6 +396,7 @@ def log_brand_info(combined_df):
 def save_combined_data(combined_df, all_prices):
     """Сохраняет объединённые данные и удаляет старые прайс-листы."""
     deleted = PriceList.objects.all().delete()
+    deleted_ProductBase = ProductBase.objects.all().delete()
     logger.debug(f"Удалено {deleted[0]} прайс-листов")
 
     for file_name, df in all_prices.items():
