@@ -205,6 +205,9 @@ class OrderItem(models.Model):
         if not rate:
             raise ValidationError(_("Не установлен курс валюты"))
 
+        # Если purchase_price_usd пуст, его значение устанавливается в 0
+        self.purchase_price_usd = self.purchase_price_usd or Decimal("0.00")
+
         calculated_price_rub = self.purchase_price_usd * rate.rate
         calculated_price_rub = Decimal(str(calculated_price_rub)).quantize(
             Decimal("0.01")
