@@ -1,0 +1,72 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_list custom_filters %}
+
+{% block coltype %}colMS{% endblock %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-form{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" type="text/css" 
+          href="{% static "admin/css/forms.css" %}">
+    <link rel="stylesheet" type="text/css" 
+          href="{% static "admin/css/changelists.css" %}">
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label='perfume' %}">Perfume</a>
+&rsaquo; <a href="{% url 'admin:perfume_order_changelist' %}">Orders</a>
+&rsaquo; Order #{{ order.id }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="module">
+    <h2>Детали заказа #{{ order.id }}</h2>
+    
+    <div class="form-row">
+        <div>
+            <p><strong>Дата:</strong> {{ order.date }}</p>
+            <p><strong>Клиент:</strong> {{ order.customer.name }} ({{ order.customer.phone }})</p>
+            <p><strong>Адрес:</strong> {{ order.address }}</p>
+            <p><strong>Статус:</strong> {{ order.status }}</p>
+            <p><strong>Служба доставки:</strong> {{ order.delivery_service }}</p>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Товар</th>
+                <th>Поставщик</th>
+                <th>Количество</th>
+                <th>Цена продажи</th>
+                <th>Цена закупки ($)</th>
+                <th>Цена закупки (₽)</th>
+                <th>Прибыль</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in order.items.all %}
+            <tr>
+                <td>{{ item.product.name }}</td>
+                <td>{{ item.supplier.name }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ item.retail_price|format_currency }}</td>
+                <td>{{ item.purchase_price_usd|format_currency }}</td>
+                <td>{{ item.purchase_price_rub|format_currency }}</td>
+                <td>{% with profit=item.retail_price|subtract:item.purchase_price_rub %}
+                    {{ profit|format_currency }}
+                    {% endwith %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="submit-row">
+        <a href="{% url 'admin:perfume_order_changelist' %}" class="button">Вернуться к списку заказов</a>
+    </div>
+</div>
+{% endblock %}

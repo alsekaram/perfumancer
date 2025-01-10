@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "rangefilter",
     "perfume.apps.PerfumeConfig",
 ]
 
@@ -101,10 +102,11 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "ru-ru"
 
-TIME_ZONE = "UTC"
 
 USE_I18N = True
+USE_L10N = True
 
+TIME_ZONE = 'Europe/Moscow'
 USE_TZ = True
 
 
