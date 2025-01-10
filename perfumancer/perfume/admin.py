@@ -5,6 +5,8 @@ from django.urls import reverse
 from django.utils.html import format_html
 from django.http import HttpResponseRedirect
 from rangefilter.filters import DateRangeFilter  # Импорт фильтра диапазона
+from django.db.models import Sum, F, ExpressionWrapper, FloatField
+from django.template.response import TemplateResponse
 
 from django import forms
 
@@ -21,6 +23,7 @@ from .models import (
 )
 from .admin_site import perfume_admin_site  # Импорт кастомного сайта
 from .utils.pluralize_russian import pluralize_russian as pluralize  # Импорт функции
+
 
 class SupplierAdmin(admin.ModelAdmin):
     list_display = ["custom_name"]
@@ -44,13 +47,26 @@ class SupplierAdmin(admin.ModelAdmin):
 
     def changelist_view(self, request, extra_context=None):
         count = Supplier.objects.count()
+        if extra_context is None:
+            extra_context = {}
+        original_verbose_name_plural = self.model._meta.verbose_name_plural
 
-        title = pluralize(count, "Поставщик", "Поставщика", "Поставщиков")
+        plural_text = pluralize(count, "Поставщик", "Поставщика", "Постащиков")
 
-        extra_context = extra_context or {}
-        extra_context["title"] = title
+        extra_context["title"] = plural_text
 
-        return super().changelist_view(request, extra_context=extra_context)
+        response = super().changelist_view(request, extra_context=extra_context)
+
+        # Меняем значение для нижней части списка
+        self.model._meta.verbose_name_plural = plural_text.split(' ', 1)[1]
+
+        # Возвращаем значение после формирования ответа
+        if isinstance(response, TemplateResponse):
+            response.add_post_render_callback(
+                lambda r: setattr(self.model._meta, 'verbose_name_plural', original_verbose_name_plural)
+            )
+
+        return response
 
 
 class PriceListAdmin(admin.ModelAdmin):
@@ -67,6 +83,7 @@ class PriceListAdmin(admin.ModelAdmin):
     get_brand.admin_order_field = "product__brand__name"
 
     def changelist_view(self, request, extra_context=None):
+        count = PriceList.objects.count()
         if extra_context is None:
             extra_context = {}
 
@@ -75,7 +92,25 @@ class PriceListAdmin(admin.ModelAdmin):
         extra_context["custom_button"] = format_html(
             '<a class="button btn btn-primary" href="{}">Обновить прайс-листы</a>', url
         )
-        return super().changelist_view(request, extra_context=extra_context)
+
+        original_verbose_name_plural = self.model._meta.verbose_name_plural
+
+        plural_text = pluralize(count, "Прайс", "Прайса", "Прайсов")
+
+        extra_context["title"] = plural_text
+
+        response = super().changelist_view(request, extra_context=extra_context)
+
+        # Меняем значение для нижней части списка
+        self.model._meta.verbose_name_plural = plural_text.split(' ', 1)[1]
+
+        # Возвращаем значение после формирования ответа
+        if isinstance(response, TemplateResponse):
+            response.add_post_render_callback(
+                lambda r: setattr(self.model._meta, 'verbose_name_plural', original_verbose_name_plural)
+            )
+
+        return response
 
     def has_add_permission(self, request):
         return False
@@ -136,7 +171,6 @@ class CurrencyRateAdmin(admin.ModelAdmin):
         return urls
 
 
-
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
@@ -151,7 +185,6 @@ class OrderItemInline(admin.TabularInline):
     ]
     readonly_fields = ["purchase_price_rub", "get_profit"]
     autocomplete_fields = ["product"]
-
 
     def get_profit(self, obj):
         if not obj.pk:
@@ -211,6 +244,20 @@ class OrderAdmin(admin.ModelAdmin):
 
     autocomplete_fields = ["customer"]
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        # Добавляем аннотацию для итоговой прибыли
+        queryset = queryset.annotate(
+            total_profit=Sum(
+                ExpressionWrapper(
+                    (F("items__retail_price") - F("items__purchase_price_rub")) * F("items__quantity"),
+                    output_field=FloatField()
+                )
+            )
+        )
+        # Сортируем по аннотированному полю
+        return queryset.order_by("-total_profit")
+
     def get_products(self, obj):
         products = []
         for item in obj.items.all():
@@ -248,7 +295,6 @@ class OrderAdmin(admin.ModelAdmin):
 
     get_purchase_price_rub.short_description = "Закупка ₽"
 
-
     def get_profit(self, obj):
         items = obj.items.all()
 
@@ -277,17 +323,25 @@ class OrderAdmin(admin.ModelAdmin):
 
     def changelist_view(self, request, extra_context=None):
         count = Order.objects.count()
-
-        title = pluralize(count, "Заказ", "Заказа", "Заказов")
-        # Подсказка для полей поиска
-        search_hint = _("Поиск доступен по полям: Имя клиента, Телефон клиента, Наименование товара, Имя поставщика.")
-
         extra_context = extra_context or {}
-        extra_context["title"] = title
-        extra_context["search_hint"] = search_hint
+        original_verbose_name_plural = self.model._meta.verbose_name_plural
 
+        plural_text = pluralize(count, "Заказ", "Заказа", "Заказов")
 
-        return super().changelist_view(request, extra_context=extra_context)
+        extra_context["title"] = plural_text
+
+        response = super().changelist_view(request, extra_context=extra_context)
+
+        # Меняем значение для нижней части списка
+        self.model._meta.verbose_name_plural = plural_text.split(' ', 1)[1]
+
+        # Возвращаем значение после формирования ответа
+        if isinstance(response, TemplateResponse):
+            response.add_post_render_callback(
+                lambda r: setattr(self.model._meta, 'verbose_name_plural', original_verbose_name_plural)
+            )
+
+        return response
 
     get_customer_info.short_description = "Контактные данные"
 
@@ -307,14 +361,29 @@ class CustomerAdmin(admin.ModelAdmin):
     search_fields = ["name", "phone"]
 
     def changelist_view(self, request, extra_context=None):
-        count = Customer.objects.count()
+        count = self.model.objects.count()
+        original_verbose_name_plural = self.model._meta.verbose_name_plural
 
-        title = pluralize(count, "Покупатель", "Покупателя", "Покупателей")
+        plural_text = pluralize(count, "Покупатель", "Покупателя", "Покупателей")
 
         extra_context = extra_context or {}
-        extra_context["title"] = title
+        extra_context["title"] = plural_text
 
-        return super().changelist_view(request, extra_context=extra_context)
+        response = super().changelist_view(request, extra_context=extra_context)
+
+        original_verbose_name_plural = self.model._meta.verbose_name_plural
+
+        # Меняем значение для нижней части списка
+        self.model._meta.verbose_name_plural = plural_text.split(' ', 1)[1]
+
+        # Возвращаем значение после формирования ответа
+        if isinstance(response, TemplateResponse):
+            response.add_post_render_callback(
+                lambda r: setattr(self.model._meta, 'verbose_name_plural', original_verbose_name_plural)
+            )
+
+        return response
+
 
 class DeliveryServiceAdmin(admin.ModelAdmin):
     list_display = ["name", "alias", "contact_phone"]
@@ -344,6 +413,7 @@ class OrderItemAdminForm(forms.ModelForm):
         if self.instance and self.instance.pk:
             self.fields["order"].widget.attrs["readonly"] = True
             self.fields["order"].disabled = True
+
 
 class OrderItemAdmin(admin.ModelAdmin):
     form = OrderItemAdminForm  # Если есть кастомная форма
@@ -376,7 +446,6 @@ class OrderItemAdmin(admin.ModelAdmin):
 
     def has_module_permission(self, request):
         return False
-
 
 
 # Регистрация моделей в кастомной админке

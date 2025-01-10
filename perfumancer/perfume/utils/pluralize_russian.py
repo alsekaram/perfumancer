@@ -16,3 +16,5 @@ def pluralize_russian(number, singular, singular_genitive, plural_genitive):
         return f"{number} {singular_genitive}"
     else:
         return f"{number} {plural_genitive}"
+
+
