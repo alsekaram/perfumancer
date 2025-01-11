@@ -2,11 +2,13 @@ from .base import *
 
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://7166-116-203-69-235.ngrok-free.app/",
+    "https://7166-116-203-69-235.ngrok-free.app",
 ]
+
+ALLOWED_HOSTS = ['*']
+
 
 DATABASES = {
     'default': {
