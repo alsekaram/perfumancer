@@ -80,7 +80,6 @@ class OrderStatus(models.Model):
         return self.name
 
 
-
 class Order(models.Model):
     # Existing fields remain the same
     date = models.DateField(verbose_name=_("Дата заказа"), default=timezone.now)
@@ -103,6 +102,22 @@ class Order(models.Model):
         verbose_name=_("Статус заказа"),
     )
     address = models.TextField(verbose_name=_("Адрес доставки"))
+
+    currency_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name=_("Курс доллара на момент создания"),
+        editable=False,
+        default=1.0,  # Default needed for South
+    )
+
+    def save(self, *args, **kwargs):
+        if not self.pk:  # Only on creation
+            rate = CurrencyRate.objects.first()
+            if not rate:
+                raise ValidationError(_("Не установлен курс валюты"))
+            self.currency_rate = rate.rate
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = _("Заказ")
@@ -201,14 +216,12 @@ class OrderItem(models.Model):
 
     def clean(self):
         super().clean()
-        rate = CurrencyRate.objects.first()
-        if not rate:
-            raise ValidationError(_("Не установлен курс валюты"))
+        if not self.order:
+            raise ValidationError(_("Заказ обязателен"))
 
-        # Если purchase_price_usd пуст, его значение устанавливается в 0
+        # Use order's currency rate instead of current
         self.purchase_price_usd = self.purchase_price_usd or Decimal("0.00")
-
-        calculated_price_rub = self.purchase_price_usd * rate.rate
+        calculated_price_rub = self.purchase_price_usd * self.order.currency_rate
         calculated_price_rub = Decimal(str(calculated_price_rub)).quantize(
             Decimal("0.01")
         )
@@ -226,4 +239,4 @@ class OrderItem(models.Model):
         verbose_name_plural = _("Товары в заказе")
 
     def __str__(self):
-        return f"{self.product.name} x{self.quantity} in Order {self.order.id}"
+        return f"{self.product.name} x {self.quantity} в заказе #{self.order.id}"

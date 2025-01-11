@@ -5,8 +5,9 @@ from django.urls import reverse
 from django.utils.html import format_html
 from django.http import HttpResponseRedirect
 from rangefilter.filters import DateRangeFilter  # Импорт фильтра диапазона
-from django.db.models import Sum, F, ExpressionWrapper, FloatField
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from django.template.response import TemplateResponse
+from decimal import Decimal
 
 from django import forms
 
@@ -58,18 +59,29 @@ class SupplierAdmin(admin.ModelAdmin):
         response = super().changelist_view(request, extra_context=extra_context)
 
         # Меняем значение для нижней части списка
-        self.model._meta.verbose_name_plural = plural_text.split(' ', 1)[1]
+        self.model._meta.verbose_name_plural = plural_text.split(" ", 1)[1]
 
         # Возвращаем значение после формирования ответа
         if isinstance(response, TemplateResponse):
             response.add_post_render_callback(
-                lambda r: setattr(self.model._meta, 'verbose_name_plural', original_verbose_name_plural)
+                lambda r: setattr(
+                    self.model._meta,
+                    "verbose_name_plural",
+                    original_verbose_name_plural,
+                )
             )
 
         return response
 
 
 class PriceListAdmin(admin.ModelAdmin):
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("product", "product__brand", "supplier")
+        )
+
     list_display = ["supplier", "get_brand", "product", "price"]
     search_fields = ["product__raw_name", "product__brand__name"]
     ordering = ["product__brand__name", "supplier", "product__raw_name"]
@@ -102,12 +114,16 @@ class PriceListAdmin(admin.ModelAdmin):
         response = super().changelist_view(request, extra_context=extra_context)
 
         # Меняем значение для нижней части списка
-        self.model._meta.verbose_name_plural = plural_text.split(' ', 1)[1]
+        self.model._meta.verbose_name_plural = plural_text.split(" ", 1)[1]
 
         # Возвращаем значение после формирования ответа
         if isinstance(response, TemplateResponse):
             response.add_post_render_callback(
-                lambda r: setattr(self.model._meta, 'verbose_name_plural', original_verbose_name_plural)
+                lambda r: setattr(
+                    self.model._meta,
+                    "verbose_name_plural",
+                    original_verbose_name_plural,
+                )
             )
 
         return response
@@ -183,15 +199,14 @@ class OrderItemInline(admin.TabularInline):
         "purchase_price_rub",
         "get_profit",
     ]
-    readonly_fields = ["purchase_price_rub", "get_profit"]
+    readonly_fields = ["purchase_price_rub", "get_profit", ]
     autocomplete_fields = ["product"]
 
     def get_profit(self, obj):
         if not obj.pk:
-            return 0
-        return (
-                obj.retail_price - obj.purchase_price_rub
-        ) * obj.quantity  # Updated profit calculation
+            return Decimal("0.00")
+        profit = (obj.retail_price - obj.purchase_price_rub) * obj.quantity
+        return profit.quantize(Decimal("0.01"))
 
     get_profit.short_description = "Прибыль (₽)"
 
@@ -209,7 +224,7 @@ order_detail.short_description = "Детали"
 
 
 class OrderAdmin(admin.ModelAdmin):
-    actions = None  # Убирает раздел "Действие"
+    actions = None
 
     list_display = [
         "date",
@@ -223,12 +238,11 @@ class OrderAdmin(admin.ModelAdmin):
         "status",
         "get_customer_info",
         "address",
-        # order_detail,
+        order_detail,
     ]
 
     list_filter = [
         ("date", DateRangeFilter),
-        # SpecificDateFilter,
         "status",
         "delivery_service",
         "items__supplier",
@@ -245,80 +259,114 @@ class OrderAdmin(admin.ModelAdmin):
     autocomplete_fields = ["customer"]
 
     def get_queryset(self, request):
-        queryset = super().get_queryset(request)
-        # Добавляем аннотацию для итоговой прибыли
-        queryset = queryset.annotate(
-            total_profit=Sum(
-                ExpressionWrapper(
-                    (F("items__retail_price") - F("items__purchase_price_rub")) * F("items__quantity"),
-                    output_field=FloatField()
-                )
+        return (
+            super()
+            .get_queryset(request)
+            .prefetch_related(
+                "items__product",
+                "items__supplier",
+                "customer",
             )
+            .annotate(
+                total_retail=Sum(F("items__retail_price") * F("items__quantity")),
+                total_purchase_usd=Sum(
+                    F("items__purchase_price_usd") * F("items__quantity")
+                ),
+                total_purchase_rub=Sum(
+                    F("items__purchase_price_rub") * F("items__quantity")
+                ),
+                total_profit=Sum(
+                    (F("items__retail_price") - F("items__purchase_price_rub"))
+                    * F("items__quantity")
+                ),
+            )
+            .order_by("-date")
         )
-        # Сортируем по аннотированному полю
-        return queryset.order_by("-total_profit")
 
     def get_products(self, obj):
+        if not obj.items.exists():
+            return "-"
         products = []
         for item in obj.items.all():
             url = reverse("admin:perfume_orderitem_change", args=[item.id])
-            products.append(format_html('<a href="{}">{}</a>', url, item.product.name))
+            products.append(
+                format_html(
+                    '<a href="{}">{} ({}шт)</a>', url, item.product.name, item.quantity
+                )
+            )
         return format_html("<br>".join(products))
 
     get_products.short_description = "Наименование товара"
 
     def get_suppliers(self, obj):
-        suppliers = [item.supplier.name for item in obj.items.all()]
+        if not obj.items.exists():
+            return "-"
+        suppliers = [f"{item.supplier.name}" for item in obj.items.all()]
         return format_html("<br>".join(suppliers))
 
     get_suppliers.short_description = "Поставщик"
 
     def get_retail_price(self, obj):
-        prices = [f"{item.retail_price * item.quantity}" for item in obj.items.all()]
+        if not obj.items.exists():
+            return "-"
+        prices = []
+        for item in obj.items.all():
+            price = (item.retail_price * item.quantity).quantize(Decimal("0.01"))
+            prices.append(f"{price:,.2f} ₽")
+        if len(prices) > 1:
+            total = obj.total_retail.quantize(Decimal("0.01"))
+            prices.append(f"<strong>Итого: {total:,.2f} ₽</strong>")
         return format_html("<br>".join(prices))
 
     get_retail_price.short_description = "Цена ₽"
 
     def get_purchase_price_usd(self, obj):
-        prices = [
-            f"{item.purchase_price_usd * item.quantity}" for item in obj.items.all()
-        ]
+        if not obj.items.exists():
+            return "-"
+        prices = []
+        for item in obj.items.all():
+            price = (item.purchase_price_usd * item.quantity).quantize(Decimal("0.01"))
+            prices.append(f"${price:,.2f}")
+        if len(prices) > 1:
+            total = obj.total_purchase_usd.quantize(Decimal("0.01"))
+            prices.append(f"<strong>Итого: ${total:,.2f}</strong>")
         return format_html("<br>".join(prices))
 
     get_purchase_price_usd.short_description = "Закупка USD"
 
     def get_purchase_price_rub(self, obj):
-        prices = [
-            f"{item.purchase_price_rub * item.quantity}" for item in obj.items.all()
-        ]
+        if not obj.items.exists():
+            return "-"
+        prices = []
+        for item in obj.items.all():
+            price = (item.purchase_price_rub * item.quantity).quantize(Decimal("0.01"))
+            prices.append(f"{price:,.2f} ₽")
+        if len(prices) > 1:
+            total = obj.total_purchase_rub.quantize(Decimal("0.01"))
+            prices.append(f"<strong>Итого: {total:,.2f} ₽</strong>")
         return format_html("<br>".join(prices))
 
     get_purchase_price_rub.short_description = "Закупка ₽"
 
     def get_profit(self, obj):
-        items = obj.items.all()
-
-        # Если в заказе один товар
-        if len(items) == 1:
-            item = items[0]
-            return str((item.retail_price - item.purchase_price_rub) * item.quantity)
-
-        # Если товаров больше одного
-        profits = [
-            str((item.retail_price - item.purchase_price_rub) * item.quantity)
-            for item in items
-        ]
-        total_profit = sum(
-            (item.retail_price - item.purchase_price_rub) * item.quantity
-            for item in items
-        )
-
-        profits.append(f"<strong>Итого: {total_profit}</strong>")
+        if not obj.items.exists():
+            return "-"
+        profits = []
+        for item in obj.items.all():
+            profit = (
+                (item.retail_price - item.purchase_price_rub) * item.quantity
+            ).quantize(Decimal("0.01"))
+            profits.append(f"{profit:,.2f} ₽")
+        if len(profits) > 1:
+            total = obj.total_profit.quantize(Decimal("0.01"))
+            profits.append(f"<strong>Итого: {total:,.2f} ₽</strong>")
         return format_html("<br>".join(profits))
 
     get_profit.short_description = "Прибыль ₽"
 
     def get_customer_info(self, obj):
+        if not obj.customer:
+            return "-"
         return format_html("{}, тел: {}", obj.customer.name, obj.customer.phone)
 
     def changelist_view(self, request, extra_context=None):
@@ -333,12 +381,16 @@ class OrderAdmin(admin.ModelAdmin):
         response = super().changelist_view(request, extra_context=extra_context)
 
         # Меняем значение для нижней части списка
-        self.model._meta.verbose_name_plural = plural_text.split(' ', 1)[1]
+        self.model._meta.verbose_name_plural = plural_text.split(" ", 1)[1]
 
         # Возвращаем значение после формирования ответа
         if isinstance(response, TemplateResponse):
             response.add_post_render_callback(
-                lambda r: setattr(self.model._meta, 'verbose_name_plural', original_verbose_name_plural)
+                lambda r: setattr(
+                    self.model._meta,
+                    "verbose_name_plural",
+                    original_verbose_name_plural,
+                )
             )
 
         return response
@@ -371,15 +423,17 @@ class CustomerAdmin(admin.ModelAdmin):
 
         response = super().changelist_view(request, extra_context=extra_context)
 
-        original_verbose_name_plural = self.model._meta.verbose_name_plural
-
         # Меняем значение для нижней части списка
-        self.model._meta.verbose_name_plural = plural_text.split(' ', 1)[1]
+        self.model._meta.verbose_name_plural = plural_text.split(" ", 1)[1]
 
         # Возвращаем значение после формирования ответа
         if isinstance(response, TemplateResponse):
             response.add_post_render_callback(
-                lambda r: setattr(self.model._meta, 'verbose_name_plural', original_verbose_name_plural)
+                lambda r: setattr(
+                    self.model._meta,
+                    "verbose_name_plural",
+                    original_verbose_name_plural,
+                )
             )
 
         return response
@@ -415,6 +469,7 @@ class OrderItemAdminForm(forms.ModelForm):
             self.fields["order"].disabled = True
 
 
+
 class OrderItemAdmin(admin.ModelAdmin):
     form = OrderItemAdminForm  # Если есть кастомная форма
     list_display = ["product", "supplier", "quantity", "retail_price"]
@@ -433,6 +488,13 @@ class OrderItemAdmin(admin.ModelAdmin):
         # Всегда перенаправляем на список заказов
         return HttpResponseRedirect(reverse("admin:perfume_order_changelist"))
 
+    def response_delete(self, request, obj_display, obj_id):
+        """
+        Перенаправление после удаления объекта OrderItem.
+        """
+        # Всегда перенаправляем на список заказов
+        return HttpResponseRedirect(reverse("admin:perfume_order_changelist"))
+
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         """
         Настраиваем страницу редактирования/создания.
@@ -442,7 +504,9 @@ class OrderItemAdmin(admin.ModelAdmin):
         extra_context["show_save_and_add_another"] = False
         extra_context["show_delete"] = True
         extra_context["show_history"] = False
-        return super().changeform_view(request, object_id, form_url, extra_context=extra_context)
+        return super().changeform_view(
+            request, object_id, form_url, extra_context=extra_context
+        )
 
     def has_module_permission(self, request):
         return False
