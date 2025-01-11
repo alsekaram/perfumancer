@@ -238,7 +238,7 @@ class OrderAdmin(admin.ModelAdmin):
         "status",
         "get_customer_info",
         "address",
-        order_detail,
+        # order_detail,
     ]
 
     list_filter = [
