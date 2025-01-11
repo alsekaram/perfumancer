@@ -193,26 +193,35 @@ class OrderItemInline(admin.TabularInline):
     fields = [
         "product",
         "supplier",
-        "quantity",  # Added quantity field
+        "quantity",
         "retail_price",
         "purchase_price_usd",
         "purchase_price_rub",
         "get_profit",
     ]
-    readonly_fields = ["purchase_price_rub", "get_profit", ]
+    readonly_fields = ["purchase_price_rub", "get_profit"]
     autocomplete_fields = ["product"]
 
     def get_profit(self, obj):
         if not obj.pk:
             return Decimal("0.00")
-        profit = (obj.retail_price - obj.purchase_price_rub) * obj.quantity
+        # Convert quantity to Decimal before multiplication
+        quantity = Decimal(str(obj.quantity))
+        profit = (obj.retail_price - obj.purchase_price_rub) * quantity
         return profit.quantize(Decimal("0.01"))
 
     get_profit.short_description = "Прибыль (₽)"
 
     def get_extra(self, request, obj=None, **kwargs):
-        # Если создаётся новый заказ (obj = None), возвращаем 1
         return 1 if obj is None else 0
+
+    def formfield_for_dbfield(self, db_field, **kwargs):
+        formfield = super().formfield_for_dbfield(db_field, **kwargs)
+        if db_field.name == "quantity":
+            # Ensure quantity is treated as Decimal
+            formfield.widget.attrs["step"] = "1"
+            formfield.widget.attrs["min"] = "1"
+        return formfield
 
 
 def order_detail(obj):
@@ -469,23 +478,20 @@ class OrderItemAdminForm(forms.ModelForm):
             self.fields["order"].disabled = True
 
 
-
 class OrderItemAdmin(admin.ModelAdmin):
-    form = OrderItemAdminForm  # Если есть кастомная форма
+    form = OrderItemAdminForm
     list_display = ["product", "supplier", "quantity", "retail_price"]
 
     def response_add(self, request, obj, post_url_continue=None):
-        """
-        Перенаправление после добавления нового объекта OrderItem.
-        """
-        # Всегда перенаправляем на список заказов
+        """Handle response after adding new OrderItem"""
+        if "_continue" in request.POST:
+            return super().response_add(request, obj, post_url_continue)
         return HttpResponseRedirect(reverse("admin:perfume_order_changelist"))
 
     def response_change(self, request, obj):
-        """
-        Перенаправление после сохранения изменения объекта OrderItem.
-        """
-        # Всегда перенаправляем на список заказов
+        """Handle response after changing OrderItem"""
+        if "_continue" in request.POST:
+            return super().response_change(request, obj)
         return HttpResponseRedirect(reverse("admin:perfume_order_changelist"))
 
     def response_delete(self, request, obj_display, obj_id):

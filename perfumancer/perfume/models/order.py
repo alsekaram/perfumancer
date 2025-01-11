@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from .price_list import Supplier, CurrencyRate
 from ..validators import phone_validator, email_validator
@@ -190,10 +190,11 @@ class OrderItem(models.Model):
         related_name="order_items",
         verbose_name=_("Поставщик"),
     )
-    quantity = models.PositiveIntegerField(
-        verbose_name=_("Количество"),
-        validators=[MinValueValidator(1)],
-        default=1,
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("1.00"),
+        verbose_name="Количество",
     )
     retail_price = models.DecimalField(
         max_digits=10,
@@ -215,22 +216,43 @@ class OrderItem(models.Model):
     )
 
     def clean(self):
+        try:
+            # Convert values to Decimal safely, handling None and invalid values
+            if self.quantity is not None:
+                self.quantity = Decimal(str(self.quantity))
+            else:
+                self.quantity = Decimal("0")
+
+            if self.retail_price is not None:
+                self.retail_price = Decimal(str(self.retail_price))
+            else:
+                self.retail_price = Decimal("0")
+
+            if self.purchase_price_usd is not None:
+                self.purchase_price_usd = Decimal(str(self.purchase_price_usd))
+            else:
+                self.purchase_price_usd = Decimal("0")
+
+            if self.purchase_price_rub is not None:
+                self.purchase_price_rub = Decimal(str(self.purchase_price_rub))
+            else:
+                self.purchase_price_rub = Decimal("0")
+
+        except (InvalidOperation, ValueError) as e:
+            from django.core.exceptions import ValidationError
+
+            raise ValidationError(f"Invalid decimal value: {str(e)}")
+
         super().clean()
-        if not self.order:
-            raise ValidationError(_("Заказ обязателен"))
-
-        # Use order's currency rate instead of current
-        self.purchase_price_usd = self.purchase_price_usd or Decimal("0.00")
-        calculated_price_rub = self.purchase_price_usd * self.order.currency_rate
-        calculated_price_rub = Decimal(str(calculated_price_rub)).quantize(
-            Decimal("0.01")
-        )
-
-        if self.purchase_price_rub != calculated_price_rub:
-            self.purchase_price_rub = calculated_price_rub
 
     def save(self, *args, **kwargs):
         with transaction.atomic():
+            # Calculate purchase price in rubles before saving
+            if self.purchase_price_usd and self.order:
+                self.purchase_price_rub = (
+                    self.purchase_price_usd * self.order.currency_rate
+                ).quantize(Decimal("0.01"))
+
             self.clean()
             super().save(*args, **kwargs)
 
