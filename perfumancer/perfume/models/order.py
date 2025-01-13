@@ -53,7 +53,11 @@ class OrderProduct(models.Model):
 class Customer(models.Model):
     name = models.CharField(max_length=255, verbose_name=_("Имя заказчика"))
     phone = models.CharField(
-        max_length=20, verbose_name=_("Телефон"), validators=[phone_validator]
+        max_length=20,
+        verbose_name=_("Телефон"),
+        validators=[phone_validator],
+        null=True,
+        blank=True,
     )
 
     class Meta:
