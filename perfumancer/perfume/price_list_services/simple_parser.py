@@ -485,6 +485,7 @@ def save_combined_price(result, dir_path):
 def main() -> bool:
     # Идем на почту
     if not renew_prices_from_mail():
+        logger.error("Не удалось обновить прайс-листы из почты")
         return False
 
     dir_path = "../" + os.getenv("SAVE_DIR")
