@@ -46,8 +46,8 @@ def download_prices(request):
     if request.method != "POST":
         return HttpResponse("Метод не поддерживается.", status=405)
 
-    dir_path = Path(os.getenv("SAVE_DIR", "."))
-    file_path = dir_path / "combined_price_list_melted.xlsx"
+    dir_path = Path(os.getenv("OUTPUT_DIR", "."))
+    file_path = dir_path / "sorted_brands_output.xlsx"
 
     if not file_path.exists():
         logger.error("Файл для скачивания не найден.")
