@@ -50,7 +50,7 @@ def download_prices(request):
     file_path = dir_path / "sorted_brands_output.xlsx"
 
     if not file_path.exists():
-        logger.error("Файл для скачивания не найден.")
+        logger.error("Файл для скачивания не найден по пути: %s", file_path)
         return redirect("/perfume/pricelist/")
 
     try:
