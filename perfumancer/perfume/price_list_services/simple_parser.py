@@ -7,6 +7,7 @@ import pandas as pd
 from pathlib import Path
 from dotenv import load_dotenv
 from openpyxl import load_workbook
+from openpyxl.styles.builtins import output
 
 from ..utils.custom_logging import configure_color_logging
 
@@ -15,6 +16,7 @@ from ..models import Brand, Product, PriceList, Supplier, ProductBase, CurrencyR
 from .brand import get_standard_brand_fuzzy, get_brand_aliases, get_brand_from_name
 from .xls_formatter import format_xls_to_xlsx
 from .mail import main_mail as renew_prices_from_mail
+from .normalizer import main as normalize_brands_names
 
 logger = logging.getLogger(__name__)
 configure_color_logging(level="INFO")
@@ -25,7 +27,7 @@ def get_currency_rate(currency_code):
     try:
         rate = CurrencyRate.objects.get(currency=currency_code).rate
         print(f"USDRUB: {rate}")
-        return rate
+        return float(rate)
     except CurrencyRate.DoesNotExist:
         logger.warning(
             "Курс валюты для %s не найден в базе данных, возвращаем курс по умолчанию",
@@ -112,10 +114,12 @@ def auto_detect_columns(df):
 
         # Проверяем, что хотя бы 50% значений заполнены, числовые и не равны нулю и меньше 5000
         numeric_values = pd.to_numeric(non_empty_values, errors="coerce")
+        count_above_5000 = (numeric_values.astype(float) > (5000 * get_currency_rate("USD"))).sum()
+
         if (
             numeric_values.notna().mean() > 0.5
             and numeric_values.mean() > 1
-            and numeric_values.max() < 5000 * get_currency_rate("USD")
+            and count_above_5000 < 5
         ):
             price_col = col
             break
@@ -224,7 +228,11 @@ def process_price_list(file_path):
     df[price_col] = pd.to_numeric(df[price_col], errors="coerce")
     # Убираем строки без цены
     df = df.dropna(subset=[price_col]).reset_index(drop=True)
-    if df[price_col].max() > 5000:
+    mask = df[price_col] > 5000
+    count = mask.sum()
+    print(f"Количество цен > 5000: {count}")
+    print(f"Результат условия: {count > 5}")
+    if (df[price_col] > 5000).sum() > 5:
         logger.debug(
             "⚠️ Вероятно цена в рублях: максимальное значение цены больше 5000: %s",
             df[price_col].max(),
@@ -458,29 +466,42 @@ def format_price_list(file_path):
 
 
 def save_combined_price(result, dir_path):
-    # мелтинг
-    result = result.melt(
-        id_vars=["brand", "name"], var_name="price_list", value_name="price"
-    ).dropna(subset=["price"])
+    try:
+        # мелтинг
+        result = result.melt(
+            id_vars=["brand", "name"], var_name="price_list", value_name="price"
+        ).dropna(subset=["price"])
 
-    result["supplier"] = result["price_list"].str.replace("price_", "")
+        result["supplier"] = result["price_list"].str.replace("price_", "")
 
-    supplier_dict = {}
-    suppliers = Supplier.objects.all()
-    for supplier in suppliers:
-        supplier_dict[supplier.email] = supplier.name
+        supplier_dict = {}
+        suppliers = Supplier.objects.all()
+        for supplier in suppliers:
+            supplier_dict[supplier.email] = supplier.name
 
-    result["supplier"] = result["supplier"].map(supplier_dict)
+        result["supplier"] = result["supplier"].map(supplier_dict)
 
-    # Переименовываем колонки на русский и переставляем их
-    result = result[["supplier", "brand", "name", "price"]]
-    result.columns = ["Поставщик", "Бренд", "Наименование", "Цена"]
+        # Переименовываем колонки на русский и переставляем их
+        result = result[["supplier", "brand", "name", "price"]]
+        result.columns = ["Поставщик", "Бренд", "Наименование", "Цена"]
 
-    # result.to_excel(Path(dir_path) / "combined_price_list_melted.xlsx", index=False)
+        # Убедимся, что директория существует
+        output_path = Path(dir_path) / "combined_price_list_melted.xlsx"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # форматируем excel файл
-    # format_price_list(Path(dir_path) / "combined_price_list_melted.xlsx")
+        # Сохраняем файл и выводим сообщение
+        print(f"Сохраняем файл в: {output_path}")
+        result.to_excel(output_path, index=False)
+        print(f"Файл успешно сохранен")
 
+        # форматируем excel файл
+        format_price_list(output_path)
+        print("Форматирование завершено")
+
+        return True
+    except Exception as e:
+        print(f"Ошибка при сохранении файла: {e}")
+        return False
 
 def main() -> bool:
     # Идем на почту
@@ -490,13 +511,15 @@ def main() -> bool:
 
     dir_path = "../" + os.getenv("SAVE_DIR")
     logger.info("Директория: %s", dir_path)
-    # process_file(Path(dir_path) / "f.sanakov@1st-original.ru.xlsx")
     result = merge_price_lists(dir_path)
+    output_path = "../" + os.getenv("OUTPUT_DIR")
     if result is not None:
         # result.to_excel("combined_price_list.xlsx", index=False)
-        save_combined_price(result, dir_path)
+        save_combined_price(result, output_path)
 
         logger.info("Добавлено записей: %s", len(result))
+        normalize_brands_names()
+
     else:
         return False
 
