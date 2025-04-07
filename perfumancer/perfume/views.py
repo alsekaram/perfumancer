@@ -13,6 +13,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Определяем базовый путь (каталог, где находится manage.py)
+BASE_DIR = Path(
+    __file__).resolve().parent.parent.parent  # возможно, нужно больше .parent в зависимости от структуры
+
 
 def renew_prices(request):
     if request.method == "POST":
@@ -46,7 +50,7 @@ def download_prices(request):
     if request.method != "POST":
         return HttpResponse("Метод не поддерживается.", status=405)
 
-    dir_path = Path("./" + os.getenv("OUTPUT_DIR", "."))
+    dir_path = BASE_DIR / os.getenv("OUTPUT_DIR", "output_prices")
     file_path = dir_path / "sorted_brands_output.xlsx"
 
     if not file_path.exists():
