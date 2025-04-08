@@ -7,7 +7,7 @@ import pandas as pd
 from pathlib import Path
 from dotenv import load_dotenv
 from openpyxl import load_workbook
-from openpyxl.styles.builtins import output
+# from openpyxl.styles.builtins import output
 
 from ..utils.custom_logging import configure_color_logging
 
@@ -210,9 +210,13 @@ def process_price_list(file_path):
         )
 
     df["brand"] = brands
-    # Убираем строки без названия
 
+    # Убираем строки без названия
     df = df.dropna(subset=[name_col]).reset_index(drop=True)
+
+    # Удаление "fragrance world " из начала имени товара
+    df[name_col] = df[name_col].astype(str).apply(
+        lambda x: x.replace("fragrance world ", "", 1) if x.lower().startswith("fragrance world ") else x)
 
     # Получаем бренд из имени
     df["brand"] = df.apply(
