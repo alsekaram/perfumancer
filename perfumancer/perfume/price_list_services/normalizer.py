@@ -502,6 +502,14 @@ def extract_aroma_name(original_text: str, brand: str, volume: str,
     if "__PERLES_DE_PLACEHOLDER__" in text:
         text = text.replace("__PERLES_DE_PLACEHOLDER__", full_name)
 
+    # Спец-обработка perles de для Lalique
+    if brand.lower() == "lalique":
+        # если видим 'perles de' + что-то, заменяем на 'Perles de Lalique'
+        text_lower = text.lower()
+        if "perles de" in text_lower:
+            # принудительно ставим единый вариант
+            return "Perles de Lalique"
+
     return text if text else "NoName"
 
 
