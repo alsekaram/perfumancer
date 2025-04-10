@@ -1,5 +1,6 @@
 import os
 import asyncio
+from collections import defaultdict
 import imaplib
 import email
 import re
@@ -121,14 +122,48 @@ def clean_header(header_value):
 def extract_excel_attachments_from_bodystructure(bodystructure):
     """Извлечение имен Excel-вложений из строки BODYSTRUCTURE."""
     attachments = []
-    pattern = r'\("application" "vnd\.(ms-excel|openxmlformats-officedocument\.spreadsheetml\.sheet)".*?\("attachment" \("filename" "(.*?)"\)\)'
-    matches = re.findall(pattern, bodystructure, re.IGNORECASE)
-    for _, encoded_filename in matches:
-        attachments.append(clean_header(encoded_filename))
-    return attachments
+
+    # Расширенный паттерн для поиска Excel-вложений
+    excel_patterns = [
+        # Стандартный паттерн для обычных Excel-файлов
+        r'\("application" "vnd\.(ms-excel|openxmlformats-officedocument\.spreadsheetml\.sheet)".*?\("attachment" \("filename" "(.*?)"\)\)',
+
+        # Альтернативный паттерн для других возможных форматов
+        r'\("application" "octet-stream".*?\("attachment" \("filename" "(.*?\.xlsx?)"\)\)',
+
+        # Паттерн для поиска по расширению файла
+        r'\("attachment".*?\("filename" "(.*?\.xlsx?)"\)\)'
+    ]
+
+    for pattern in excel_patterns:
+        if pattern.endswith('xlsx?)"\)\)'):
+            # Для паттернов, где ищем по расширению, извлекаем только имя файла
+            matches = re.findall(pattern, bodystructure, re.IGNORECASE)
+            for filename in matches:
+                if filename.lower().endswith(('.xls', '.xlsx')):
+                    attachments.append(clean_header(filename))
+        else:
+            # Для остальных паттернов
+            matches = re.findall(pattern, bodystructure, re.IGNORECASE)
+            for items in matches:
+                if isinstance(items, tuple):
+                    # Если найдено несколько групп захвата
+                    filename = items[-1]  # Берем последний элемент (имя файла)
+                    attachments.append(clean_header(filename))
+                else:
+                    # Если найдена только одна группа
+                    attachments.append(clean_header(items))
+
+    # Удаляем дубликаты
+    return list(dict.fromkeys(attachments))
 
 
 def filter_message(messages_data):
+    """
+    Фильтрует сообщения и оставляет только самое последнее с Excel-вложением
+    от каждого отправителя.
+    """
+    # Первый этап - отфильтровываем ненужные сообщения
     filtered_messages = []
     for message in messages_data:
         if not message.get("subject"):
@@ -139,10 +174,34 @@ def filter_message(messages_data):
             continue
         filtered_messages.append(message)
 
-    unique_senders = {msg["address"]: msg for msg in filtered_messages}
-    filtered_messages = [msg for msg in sorted(unique_senders.values(), key=lambda x: x["date"])]
-    return filtered_messages
+    # Группируем по адресу отправителя и оставляем только самое свежее сообщение
+    latest_messages = {}
+    for message in filtered_messages:
+        address = message["address"].lower()
 
+        # Если адрес уже встречался, сравниваем даты
+        if address in latest_messages:
+            try:
+                # Пытаемся преобразовать строки дат в datetime объекты для корректного сравнения
+                current_date = email.utils.parsedate_to_datetime(message["date"])
+                saved_date = email.utils.parsedate_to_datetime(latest_messages[address]["date"])
+
+                # Если текущее сообщение новее, заменяем сохраненное
+                if current_date > saved_date:
+                    latest_messages[address] = message
+            except:
+                # Если не получается преобразовать даты, просто заменяем
+                # (предполагая, что сообщения отсортированы по дате)
+                latest_messages[address] = message
+        else:
+            # Если это первое сообщение от данного отправителя, сохраняем его
+            latest_messages[address] = message
+
+    # Преобразуем словарь обратно в список и сортируем по дате
+    result = list(latest_messages.values())
+    result.sort(key=lambda x: x.get("date", ""), reverse=True)  # Сортировка от новых к старым
+
+    return result
 
 async def fetch_emails_with_excel_attachments_async(imap, days=8):
     """Async version of fetch_emails_with_excel_attachments"""
@@ -261,10 +320,14 @@ async def save_attachments_async(imap, emails):
         await process_and_save_email(fetched_data, email_data, dir_path)
 
 
+
+
+
 def main_mail() -> bool:
     logger.info("Запуск почтовой службы")
     try:
         asyncio.run(start_server_email_standalone())
+        # asyncio.run(print_grouped_sender_addresses())
         return True
     except Exception as e:
         logger.error(f"Ошибка в процессе работы с почтой: {e}")
@@ -274,8 +337,7 @@ def main_mail() -> bool:
 if __name__ == "__main__":
     from dotenv import load_dotenv
     from perfumancer.perfume.utils.custom_logging import configure_color_logging
-
     load_dotenv()
     configure_color_logging(level="DEBUG")
-
+    # Запуск функции
     main_mail()
