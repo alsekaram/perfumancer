@@ -639,7 +639,7 @@ def main():
 
     result_df = normalizer.process()
 
-    out_file = "../../" + os.getenv("OUTPUT_DIR") + "/normalized_output.xlsx"
+    out_file = "../" + os.getenv("OUTPUT_DIR") + "/normalized_output.xlsx"
     result_df.to_excel(out_file, index=False)
     print(f"Готово! Итоговый файл: {out_file}")
 
