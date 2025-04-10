@@ -6,10 +6,14 @@ import re
 
 from dotenv import load_dotenv
 
+from .french_normalizer import FrenchNameNormalizer
 # from dotenv import load_dotenv
 
 from .brand import get_standard_brand_fuzzy, get_brand_from_name
 from ..utils.price_file_formatter import format_price_list
+
+
+_french_normalizer = FrenchNameNormalizer()
 
 # ====== Справочники ======
 # порядок и позиция важны
@@ -68,9 +72,11 @@ GARBAGE_WORDS = ["пакет", "test золотые", "new", "пробник",
                     "mini", "мини", "minispray", "отливант",
                     "подарочный набор", "gift set", "сколы", "остаток",
                  "косметичка", "свеча", "balm", "с русификацией", "..&", "сломан",
-                 "не хватает",]
+                 "не хватает", "сумка", "клатч", "крем", "dutyfree",
+                 ]
 
-EXTRA_INFO_WORDS = ["sample", "(travel)", "travel", "пробирка", "probirka"]
+EXTRA_INFO_WORDS = ["sample", "(travel)", "travel", "пробирка", "probirka",
+                    "fragrance world"]
 
 GENDER_PATTERNS = [
     # Унисекс варианты (unisex)
@@ -159,6 +165,10 @@ FLANKER_SYNONYMS = [
     (r'\ble\s+baiser\s+de\b', 'le baiser'),
     (r'\bsatin[e]?\b', 'satine'),  # Normalize both satin and satine to satine
 
+    # обработка апострофов
+    (r"(\w)d\s+([aeiouy]\w*)", r"\1d'\2"),  # darpege -> d'arpege
+    (r"(\w)d([aeiouy]\w*)", r"\1d'\2"),  # darpege -> d'arpege
+
 
 
 
@@ -167,11 +177,8 @@ FLANKER_SYNONYMS = [
 
 def clean_trailing_prepositions(text: str) -> str:
     """Remove dangling French prepositions at the end of phrases."""
-    # Remove trailing prepositions with optional whitespace
-    text = re.sub(r'\s+(de|du|des|le|la|les|à|et|en|dans|par|pour|sur|avec)\s*$', '', text)
-    # Also remove trailing prepositions followed by punctuation
-    text = re.sub(r'\s+(de|du|des|le|la|les|à|et|en|dans|par|pour|sur|avec)\s*[.,;:!?]$', '', text)
-    return text
+    return _french_normalizer.remove_dangling_prepositions(text)
+
 
 def unify_concentration_by_volume_groups(df):
     """
@@ -244,9 +251,9 @@ def normalize_aroma_variants(df):
             if len(genders) > 1 and 'unisex' in genders:
                 # Если есть и мужской, и женский, и унисекс - приоритет у унисекс
                 df.loc[group.index, 'Gender'] = 'unisex'
-            elif 'male' in genders and 'female' in genders:
-                # Если есть и мужской, и женский (но нет унисекс) - считаем унисекс
-                df.loc[group.index, 'Gender'] = 'unisex'
+            # elif 'male' in genders and 'female' in genders:
+            #     # Если есть и мужской, и женский (но нет унисекс) - считаем унисекс
+            #     df.loc[group.index, 'Gender'] = 'unisex'
 
     # Удаляем временную колонку
     df.drop('Word_Set', axis=1, inplace=True)
@@ -363,49 +370,19 @@ def unify_flanker_words(text: str) -> str:
 
 
 def normalize_french_names(text: str) -> str:
-    # Remove dangling prepositions at the end of names
-    text = re.sub(r'\b(de|du|des|le|la|les|l\')\s*$', '', text)
-    # Special direct replacement for encre noire variants to ensure consistency
-    text_lower = text.lower()
-    if ("encre" in text_lower and "noir" in text_lower and "extreme" in text_lower):
-        # First directly normalize these problematic cases
-        return re.sub(
-            r'encre\s+noir[e]?(?:\s+|["`\'])?(?:a\s+)?(?:l[`\'\"])?(?:a\s+)?(?:l[`\'\"])?extreme',
-            'encre noire a l\'extreme', text, flags=re.IGNORECASE
-        )
-
-    # Handle specific cases for l'amour variations
-    if re.search(r'l[\'\s]*amour', text_lower):
-        text = re.sub(r'l[\'\s]*amour\s*(?:de\s+)?(?:lady\b)?', "l'amour", text, flags=re.IGNORECASE)
-
-    if "perles" in text_lower and "de" in text_lower:
-        # Normalize "perles de" variants
-        text = re.sub(r'\bperles?\s+de\s+', 'perles de ', text, flags=re.IGNORECASE)
-
- # Normal processing for other cases
-    # Замена l' / d'
-    text = re.sub(r'l\s*[\'`](\w)', r"l'\1", text)
-    text = re.sub(r'd\s*[\'`](\w)', r"d'\1", text)
-
-    # Добавим обработку случаев, когда есть только пробел без апострофа
-    text = re.sub(r'\b(d)\s+([aeiouy]\w*)', r"d'\2", text, flags=re.IGNORECASE)
-    text = re.sub(r'\b(l)\s+([aeiouy]\w*)', r"l'\2", text, flags=re.IGNORECASE)
-
-    # Убираем дубликаты предлогов
-    text = re.sub(r'\b(a|de|le|la|les|l\')\s+\1\b', r'\1', text, flags=re.IGNORECASE)
-    text = re.sub(r'\ba\s+l[\'`]', r"a l'", text, flags=re.IGNORECASE)
-    text = re.sub(r'\ba\s+l[\'`]\s*a\s+l[\'`]', r"a l'", text, flags=re.IGNORECASE)
-
-    return text
-
+    """Обертка для совместимости со старым кодом."""
+    return _french_normalizer.normalize(text)
 
 def extract_aroma_name(original_text: str, brand: str, volume: str,
                        concentration: str, type_: str, gender: str) -> str:
     text = preprocess_text(original_text)
+
     text = clean_trailing_prepositions(text)
 
     # Special direct replacement for problem cases
     text_lower = text.lower()
+    text = clean_extra_info(text_lower)
+    # text_lower = preprocess_text(text_lower)
 
     # Special case for "encre noire a l'extreme"
     if ("encre" in text_lower and "noir" in text_lower and "extreme" in text_lower):
@@ -459,7 +436,7 @@ def extract_aroma_name(original_text: str, brand: str, volume: str,
     if type_:
         synonyms = [k for (k, v) in TYPE_KEYWORDS.items() if v == type_]
         # Приводим текст к нижнему регистру для сравнения
-        lower_text = text.lower()
+        # lower_text = text.lower()
         for syn in synonyms:
             # Более надежное регулярное выражение с учетом возможных пробелов
             pattern = rf'(?<!\w){re.escape(syn)}(?!\w)'
@@ -496,7 +473,6 @@ def extract_aroma_name(original_text: str, brand: str, volume: str,
 
     text = unify_flanker_words(text)
     text = re.sub(r'\s+', ' ', text).strip()
-    text = clean_extra_info(text)
 
     # Restore the "perles de" placeholder if it exists
     if "__PERLES_DE_PLACEHOLDER__" in text:
@@ -525,11 +501,14 @@ def fill_column_if_unique(df: pd.DataFrame, fill_col: str, group_cols: list) -> 
     """
     df = df.copy()
     for _, idx in df.groupby(group_cols).groups.items():
-        subset = df.loc[idx, fill_col].dropna()
-        non_empty = [x for x in subset if x.strip()]
+        subset = df.loc[idx, fill_col]
+        # Improved: better handling of NaN values
+        subset = subset.dropna().astype(str)
+        non_empty = [x for x in subset if x.strip() and x.lower() not in ['nan', 'none']]
         if len(set(non_empty)) == 1:  # ровно одно уникальное значение
             unique_val = non_empty[0]
-            mask = df.loc[idx, fill_col].isin(["", None, "nan"])
+            # Improved: more accurate mask for empty values
+            mask = df.loc[idx, fill_col].isna() | (df.loc[idx, fill_col].astype(str).str.strip() == '') | (df.loc[idx, fill_col].astype(str).str.lower() == 'nan') | (df.loc[idx, fill_col].astype(str).str.lower() == 'none')
             df.loc[idx, fill_col] = df.loc[idx, fill_col].where(~mask, unique_val)
     return df
 
@@ -599,6 +578,12 @@ class PerfumeNormalizer:
         print(
             f"После normalize_row: строк = {len(result_df)}, пустых Product Name = {(result_df['Product Name'].fillna('') == '').sum()}")
 
+        # 3) ЗДЕСЬ добавляем нормализацию ароматов
+        result_df = normalize_aroma_variants(result_df)
+
+        # 3.5) Унифицируем концентрации в группах с одинаковым брендом, ароматом, гендером и объемом
+        result_df = unify_concentration_by_volume_groups(result_df)
+
         # 2) Заполняем пропущенные Concentration и Gender
         result_df = fill_column_if_unique(
             result_df, fill_col="Concentration",
@@ -606,17 +591,12 @@ class PerfumeNormalizer:
         )
         result_df = fill_column_if_unique(
             result_df, fill_col="Gender",
-            group_cols=["Canonical Brand", "Aroma Name", "Volume", "Concentration", "Type"]
+            group_cols=["Canonical Brand", "Aroma Name"]
         )
 
         print(
             f"После fill_column_if_unique: строк = {len(result_df)}, пустых Product Name = {(result_df['Product Name'].fillna('') == '').sum()}")
 
-        # 3) ЗДЕСЬ добавляем нормализацию ароматов
-        result_df = normalize_aroma_variants(result_df)
-
-        # 3.5) Унифицируем концентрации в группах с одинаковым брендом, ароматом, гендером и объемом
-        result_df = unify_concentration_by_volume_groups(result_df)
 
         # After normalize_aroma_variants and unify_concentration_by_volume_groups
         result_df = fill_column_if_unique(
@@ -651,7 +631,7 @@ class PerfumeNormalizer:
 
 
 def main():
-    file_path = "../../../" + os.getenv("OUTPUT_DIR") + "/combined_price_list_melted.xlsx"
+    file_path = "../" + os.getenv("OUTPUT_DIR") + "/combined_price_list_melted.xlsx"
 
     normalizer = PerfumeNormalizer(file_path, sheet_name=0)
     df_in = normalizer.load_file()
@@ -659,7 +639,7 @@ def main():
 
     result_df = normalizer.process()
 
-    out_file = "../../../" + os.getenv("OUTPUT_DIR") + "/normalized_output.xlsx"
+    out_file = "../../" + os.getenv("OUTPUT_DIR") + "/normalized_output.xlsx"
     result_df.to_excel(out_file, index=False)
     print(f"Готово! Итоговый файл: {out_file}")
 
@@ -672,7 +652,7 @@ def main():
 
 
     # Сохраняем в новый файл
-    sorted_out_file = "../../../" + os.getenv("OUTPUT_DIR") + "/sorted_brands_output.xlsx"
+    sorted_out_file = "../" + os.getenv("OUTPUT_DIR") + "/sorted_brands_output.xlsx"
     sorted_df.to_excel(sorted_out_file, index=False)
     print(f"Готово! Файл, отсортированный по бренду и наименованию: {sorted_out_file}")
     format_price_list(sorted_out_file)
