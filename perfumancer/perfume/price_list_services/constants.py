@@ -851,4 +851,5 @@ FLANKER_SYNONYMS = [
     (r"(\w)d\s+([aeiouy]\w*)", r"\1d'\2"),  # darpege -> d'arpege
     (r"(\w)d([aeiouy]\w*)", r"\1d'\2"),  # darpege -> d'arpege
     ("blu fico di", r"fico di"),  # darpege -> d'arpege
+    (r"\beau\s+de\s+soir\b", "eau du soir"),
 ]
