@@ -54,6 +54,33 @@ CONC_PATTERNS = [
 ]
 
 
+# -----------------------------------------------------------------
+# помощник: проверка «пустой» ячейки гендера ----------------------
+def _is_blank_gender(series: pd.Series) -> pd.Series:
+    """True, если NaN, None, '', 'nan', 'none' (регистронезависимо)."""
+    return series.isna() | series.astype(str).str.strip().str.lower().isin(
+        ["", "nan", "none"]
+    )
+
+
+# -----------------------------------------------------------------
+def assign_female_to_eclat(
+    df: pd.DataFrame,
+    aroma_col: str = "Aroma Name",
+    gender_col: str = "Gender",
+) -> pd.DataFrame:
+    """
+    Всем строкам с ароматом *eclat d'arpege* и пустым гендером
+    проставляем 'female'.  Работает in-place и возвращает df
+    (удобно для чейнинга).
+    """
+    mask_aroma = df[aroma_col].str.lower().str.strip() == "eclat d'arpege"
+    mask_no_gndr = _is_blank_gender(df[gender_col])
+
+    df.loc[mask_aroma & mask_no_gndr, gender_col] = "female"
+    return df
+
+
 def extract_concentration(text: str) -> str:
     """
     Возвращает каноническую концентрацию (EDP / EDT / PARFUM …)
@@ -609,6 +636,8 @@ class PerfumeNormalizer:
         result_df = fill_column_if_unique(
             result_df, fill_col="Gender", group_cols=["Canonical Brand", "Aroma Name"]
         )
+
+        result_df = assign_female_to_eclat(result_df)
 
         print(
             f"После fill_column_if_unique: строк = {len(result_df)}, пустых Product Name = {(result_df['Product Name'].fillna('') == '').sum()}"
