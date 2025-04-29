@@ -4,6 +4,7 @@ import re
 from typing import List
 
 import pandas as pd
+import numpy as np
 from pathlib import Path
 from dotenv import load_dotenv
 from openpyxl import load_workbook
@@ -157,54 +158,69 @@ def clean_extra_info(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def fill_nan_brands_from_context(df):
+def fill_nan_brands_from_context(
+    df: pd.DataFrame,
+    name_col: str,
+    window_up: int = 10,
+    window_down: int = 10,
+    missing_values: tuple = (None, np.nan, "NAN"),
+    logger=None,
+) -> pd.DataFrame:
     """
-    Заполняет строки с брендом 'NAN' на основе контекста:
-    если в пределах 10 строк выше есть строка с непустым брендом и
-    ниже есть строки с этим же брендом, заменяем 'NAN' этим брендом.
+    Заполняет пропущенные бренды на основе:
+      1) Последнего ненулевого бренда в window_up строках выше (orig_brand).
+      2) Либо если в следующих window_down названиях встречается этот бренд.
+      3) Либо если предыдущая строка (уже после заливки) была тем же брендом — даем каскадную заливку.
     """
-    # Создаем копию DataFrame для работы
-    result_df = df.copy()
+    # валидация
+    if name_col not in df.columns:
+        raise ValueError(f"Column '{name_col}' not found")
+    if "brand" not in df.columns:
+        raise ValueError("Column 'brand' not found")
 
-    # Получаем индексы строк со значением 'NAN' в столбце brand
-    nan_indices = result_df[result_df["brand"] == "NAN"].index.tolist()
-    print("NAN indexes", nan_indices)
+    df_work = df.copy()
+    n = len(df_work)
 
-    for nan_idx in nan_indices:
-        # Ищем бренды выше (до 10 строк)
-        upper_limit = max(0, nan_idx - 10)
-        # Отфильтруем только непустые бренды, отличные от 'NAN'
-        brands_above = result_df.loc[upper_limit : nan_idx - 1, "brand"]
-        brands_above = brands_above[
-            (brands_above != "NAN") & (~pd.isna(brands_above))
-        ].tolist()
+    # сохраним исходный бренд, чтобы искать только по нему «заголовки»
+    orig_brand = df_work["brand"].copy()
 
-        if not brands_above:
+    # найдём все позиции, где марки «пустые»
+    is_missing = orig_brand.isna() | orig_brand.isin(missing_values)
+    nan_positions = [i for i, m in enumerate(is_missing) if m]
+
+    brand_col_idx = df_work.columns.get_loc("brand")
+    filled = 0
+
+    for pos in nan_positions:
+        # 1) последний ненулевой бренд вверху
+        start = max(0, pos - window_up)
+        above = orig_brand.iloc[start:pos]
+        valid = above[~above.isna() & ~above.isin(missing_values)]
+        if valid.empty:
             continue
+        closest = valid.iloc[-1]
 
-        # Берем ближайший бренд выше
-        closest_brand = brands_above[-1]
+        # 2) проверяем вхождение в тексты ниже
+        end = min(n, pos + window_down + 1)
+        below_names = df_work.iloc[pos + 1 : end][name_col].dropna().astype(str)
+        contains = below_names.str.contains(
+            re.escape(str(closest)), case=False, na=False
+        ).any()
 
-        # Ищем строки с этим брендом ниже
-        lower_limit = min(len(result_df) - 1, nan_idx + 10)
-        # Получаем строки ниже текущей
-        brands_below = result_df.loc[nan_idx + 1 : lower_limit, "brand"].tolist()
+        # 3) Каскадная заливка: если сразу под уже залитой строкой
+        prev_same = pos > 0 and df_work.iat[pos - 1, brand_col_idx] == closest
 
-        # Проверяем, содержится ли название бренда в каких-либо строках ниже
-        contains_brand = any(
-            closest_brand.lower() in str(brand).lower()
-            for brand in brands_below
-            if isinstance(brand, str)
-        )
+        if contains or prev_same:
+            df_work.iat[pos, brand_col_idx] = closest
+            filled += 1
 
-        # Используем contains_brand вместо простой проверки на вхождение
-        if contains_brand:
-            # Если да, заполняем 'NAN' этим брендом
-            result_df.at[nan_idx, "brand"] = closest_brand
-            print("Closest brand", closest_brand)
-            print("brands_below", brands_below)
+    msg = f"fill_nan_brands_from_context: заполнено {filled} из {len(nan_positions)} пропусков"
+    if logger:
+        logger.info(msg)
+    else:
+        print(msg)
 
-    return result_df
+    return df_work
 
 
 def process_price_list(file_path):
@@ -303,7 +319,7 @@ def process_price_list(file_path):
     # смотрим на строки с брендом NAN,
     # если выше чем на 10 строк есть строка с брендом и
     # ниже есть строки с этим брендом - ставим вместо NAN этот бренд
-    # df = fill_nan_brands_from_context(df)
+    df = fill_nan_brands_from_context(df, name_col)
 
     # Колонку с ценой делаем числовой
     df[price_col] = pd.to_numeric(df[price_col], errors="coerce")
@@ -588,9 +604,9 @@ def save_combined_price(result, dir_path):
 def main() -> bool:
 
     # Идем на почту, если не нужно ходить на почту - комментруем
-    # if not renew_prices_from_mail():
-    #     logger.error("Не удалось обновить прайс-листы из почты")
-    #     return False
+    if not renew_prices_from_mail():
+        logger.error("Не удалось обновить прайс-листы из почты")
+        return False
 
     dir_path = "../" + os.getenv("SAVE_DIR")
     logger.info("Директория: %s", dir_path)
@@ -601,7 +617,7 @@ def main() -> bool:
         save_combined_price(result, output_path)
 
         logger.info("Добавлено записей: %s", len(result))
-        # normalize_brands_names()
+        normalize_brands_names()
 
     else:
         return False
