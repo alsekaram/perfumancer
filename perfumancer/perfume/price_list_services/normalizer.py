@@ -684,8 +684,8 @@ class PerfumeNormalizer:
 
 
 def main():
-    file_path = "../" + os.getenv("OUTPUT_DIR") + "/combined_price_list_melted.xlsx"
-    # file_path = "../" + os.getenv("OUTPUT_DIR") + "/nan_clear_pl.xlsx"
+    # file_path = "../" + os.getenv("OUTPUT_DIR") + "/combined_price_list_melted.xlsx"
+    file_path = "../" + os.getenv("OUTPUT_DIR") + "/nan_clear_pl.xlsx"
 
     normalizer = PerfumeNormalizer(file_path, sheet_name=0)
     df_in = normalizer.load_file()
