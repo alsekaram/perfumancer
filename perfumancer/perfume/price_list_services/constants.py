@@ -35,6 +35,11 @@ CONCENTRATION_MAP = {
     # one more
     "eau fraiche": "Eau Fraiche",
     "свежая вода": "Eau Fraiche",
+    "deodorant spray": "DEO",
+    "deo spray": "DEO",
+    "deo": "DEO",
+    "body spray": "DEO",
+    "spray": "DEO",
 }
 
 TYPE_KEYWORDS = {
@@ -795,6 +800,7 @@ COMMON_VOLUMES = [
     20,
     30,
     50,
+    60,
     75,
     90,
     100,
@@ -852,4 +858,8 @@ FLANKER_SYNONYMS = [
     (r"(\w)d([aeiouy]\w*)", r"\1d'\2"),  # darpege -> d'arpege
     ("blu fico di", r"fico di"),  # darpege -> d'arpege
     (r"\beau\s+de\s+soir\b", "eau du soir"),
+    ("les fleurs de :", "les fleurs"),
+    ("marry me!", "marry me"),
+    ("arpege eclat", "eclat d'arpege"),
+    ("vetiver", "vetyver"),
 ]
