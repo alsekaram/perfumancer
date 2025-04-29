@@ -685,14 +685,14 @@ class PerfumeNormalizer:
 
 def main():
     # file_path = "../" + os.getenv("OUTPUT_DIR") + "/combined_price_list_melted.xlsx"
-    file_path = "../../../" + os.getenv("OUTPUT_DIR") + "/nan_clear_pl.xlsx"
+    file_path = "../" + os.getenv("OUTPUT_DIR") + "/nan_clear_pl.xlsx"
 
     normalizer = PerfumeNormalizer(file_path, sheet_name=0)
     df_in = normalizer.load_file()
 
     result_df = normalizer.process()
 
-    out_file = "../../../" + os.getenv("OUTPUT_DIR") + "/normalized_output.xlsx"
+    out_file = "../" + os.getenv("OUTPUT_DIR") + "/normalized_output.xlsx"
     result_df.to_excel(out_file, index=False)
     print(f"Готово! Итоговый файл: {out_file}")
 
@@ -723,9 +723,7 @@ def main():
     ]
 
     # Сохраняем в новый файл
-    sorted_out_file = (
-        "../../../" + os.getenv("OUTPUT_DIR") + "/sorted_brands_output.xlsx"
-    )
+    sorted_out_file = "../" + os.getenv("OUTPUT_DIR") + "/sorted_brands_output.xlsx"
     sorted_df.to_excel(sorted_out_file, index=False)
     print(f"Готово! Файл, отсортированный по бренду и наименованию: {sorted_out_file}")
     format_price_list(sorted_out_file)
