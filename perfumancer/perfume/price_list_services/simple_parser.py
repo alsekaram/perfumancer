@@ -19,6 +19,7 @@ from .brand import get_standard_brand_fuzzy, get_brand_aliases, get_brand_from_n
 from .xls_formatter import format_xls_to_xlsx
 from .mail import main_mail as renew_prices_from_mail
 from .normalizer import main as normalize_brands_names
+from .price_data_cleaner import main as clear_price_data
 
 from .constants import GARBAGE_WORDS, EXTRA_INFO_WORDS
 
@@ -617,6 +618,7 @@ def main() -> bool:
         save_combined_price(result, output_path)
 
         logger.info("Добавлено записей: %s", len(result))
+        clear_price_data()
         normalize_brands_names()
 
     else:
