@@ -7,6 +7,7 @@ import pandas as pd
 from pathlib import Path
 from dotenv import load_dotenv
 from openpyxl import load_workbook
+
 # from openpyxl.styles.builtins import output
 
 from ..utils.custom_logging import configure_color_logging
@@ -17,6 +18,8 @@ from .brand import get_standard_brand_fuzzy, get_brand_aliases, get_brand_from_n
 from .xls_formatter import format_xls_to_xlsx
 from .mail import main_mail as renew_prices_from_mail
 from .normalizer import main as normalize_brands_names
+
+from .constants import GARBAGE_WORDS, EXTRA_INFO_WORDS
 
 logger = logging.getLogger(__name__)
 configure_color_logging(level="INFO")
@@ -114,7 +117,9 @@ def auto_detect_columns(df):
 
         # Проверяем, что хотя бы 50% значений заполнены, числовые и не равны нулю и меньше 5000
         numeric_values = pd.to_numeric(non_empty_values, errors="coerce")
-        count_above_5000 = (numeric_values.astype(float) > (5000 * get_currency_rate("USD"))).sum()
+        count_above_5000 = (
+            numeric_values.astype(float) > (5000 * get_currency_rate("USD"))
+        ).sum()
 
         if (
             numeric_values.notna().mean() > 0.5
@@ -144,11 +149,67 @@ def auto_detect_columns(df):
     return name_col, price_col
 
 
+def clean_extra_info(text: str) -> str:
+    text = re.sub(r"\[.*?\]", "", text)  # убираем [ ... ]
+    text = re.sub(r"[\"“”\']+", "", text)  # кавычки
+    for w in EXTRA_INFO_WORDS:
+        text = re.sub(rf"\b{w}\b", "", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def fill_nan_brands_from_context(df):
+    """
+    Заполняет строки с брендом 'NAN' на основе контекста:
+    если в пределах 10 строк выше есть строка с непустым брендом и
+    ниже есть строки с этим же брендом, заменяем 'NAN' этим брендом.
+    """
+    # Создаем копию DataFrame для работы
+    result_df = df.copy()
+
+    # Получаем индексы строк со значением 'NAN' в столбце brand
+    nan_indices = result_df[result_df["brand"] == "NAN"].index.tolist()
+    print("NAN indexes", nan_indices)
+
+    for nan_idx in nan_indices:
+        # Ищем бренды выше (до 10 строк)
+        upper_limit = max(0, nan_idx - 10)
+        # Отфильтруем только непустые бренды, отличные от 'NAN'
+        brands_above = result_df.loc[upper_limit : nan_idx - 1, "brand"]
+        brands_above = brands_above[
+            (brands_above != "NAN") & (~pd.isna(brands_above))
+        ].tolist()
+
+        if not brands_above:
+            continue
+
+        # Берем ближайший бренд выше
+        closest_brand = brands_above[-1]
+
+        # Ищем строки с этим брендом ниже
+        lower_limit = min(len(result_df) - 1, nan_idx + 10)
+        # Получаем строки ниже текущей
+        brands_below = result_df.loc[nan_idx + 1 : lower_limit, "brand"].tolist()
+
+        # Проверяем, содержится ли название бренда в каких-либо строках ниже
+        contains_brand = any(
+            closest_brand.lower() in str(brand).lower()
+            for brand in brands_below
+            if isinstance(brand, str)
+        )
+
+        # Используем contains_brand вместо простой проверки на вхождение
+        if contains_brand:
+            # Если да, заполняем 'NAN' этим брендом
+            result_df.at[nan_idx, "brand"] = closest_brand
+            print("Closest brand", closest_brand)
+            print("brands_below", brands_below)
+
+    return result_df
+
+
 def process_price_list(file_path):
     """Обрабатывает один прайс-лист, выделяет торговые марки и сопоставляет их с товарами."""
-    logger.info(
-        "Чтение файла: %s", file_path
-    )
+    logger.info("Чтение файла: %s", file_path)
     df = pd.read_excel(file_path, engine="openpyxl", header=None)
     if len(df) < 30:
         logger.warning(
@@ -172,18 +233,36 @@ def process_price_list(file_path):
         )
         return None
 
-    logger.info(
-        f"Найдены колонки: Название - '{name_col}', Цена - '{price_col}'"
-    )  # Было: print(...)
+    logger.info(f"Найдены колонки: Название - '{name_col}', Цена - '{price_col}'")
     df[name_col] = df[name_col].astype(str)
+
+    # Убираем строки без названия
+    df = df.dropna(subset=[name_col]).reset_index(drop=True)
+
+    for word in GARBAGE_WORDS:
+        df = df[
+            ~df[name_col].astype(str).str.lower().str.contains(word.lower(), na=False)
+        ]
+
+    for word in EXTRA_INFO_WORDS:
+        df[name_col] = (
+            df[name_col].astype(str).apply(lambda x: re.sub(rf"\b{word}\b", "", x))
+        )
+
+    # Удаление "fragrance world " из начала имени товара (с учетом регистра)
+    df[name_col] = (
+        df[name_col]
+        .astype(str)
+        .apply(lambda x: x[16:] if x.lower().startswith("fragrance world ") else x)
+    )
 
     # Обработка брендов
     df["brand"] = None
     # current_brand = None
 
-    df["brand"] = df["brand"].replace(
-        to_replace=r"^\s*(NAN|nan|NaN)\s*$", value=pd.NA, regex=True
-    )
+    # df["brand"] = df["brand"].replace(
+    #     to_replace=r"^\s*(NAN|nan|NaN)\s*$", value=pd.NA, regex=True
+    # )
 
     brands = []
     for i, row in df.iterrows():
@@ -211,13 +290,6 @@ def process_price_list(file_path):
 
     df["brand"] = brands
 
-    # Убираем строки без названия
-    df = df.dropna(subset=[name_col]).reset_index(drop=True)
-
-    # Удаление "fragrance world " из начала имени товара
-    df[name_col] = df[name_col].astype(str).apply(
-        lambda x: x.replace("fragrance world ", "", 1) if x.lower().startswith("fragrance world ") else x)
-
     # Получаем бренд из имени
     df["brand"] = df.apply(
         lambda x: (
@@ -227,6 +299,11 @@ def process_price_list(file_path):
         ),
         axis=1,
     )
+
+    # смотрим на строки с брендом NAN,
+    # если выше чем на 10 строк есть строка с брендом и
+    # ниже есть строки с этим брендом - ставим вместо NAN этот бренд
+    # df = fill_nan_brands_from_context(df)
 
     # Колонку с ценой делаем числовой
     df[price_col] = pd.to_numeric(df[price_col], errors="coerce")
@@ -507,11 +584,13 @@ def save_combined_price(result, dir_path):
         print(f"Ошибка при сохранении файла: {e}")
         return False
 
+
 def main() -> bool:
-    # Идем на почту
-    if not renew_prices_from_mail():
-        logger.error("Не удалось обновить прайс-листы из почты")
-        return False
+
+    # Идем на почту, если не нужно ходить на почту - комментруем
+    # if not renew_prices_from_mail():
+    #     logger.error("Не удалось обновить прайс-листы из почты")
+    #     return False
 
     dir_path = "../" + os.getenv("SAVE_DIR")
     logger.info("Директория: %s", dir_path)
@@ -522,7 +601,7 @@ def main() -> bool:
         save_combined_price(result, output_path)
 
         logger.info("Добавлено записей: %s", len(result))
-        normalize_brands_names()
+        # normalize_brands_names()
 
     else:
         return False
@@ -538,4 +617,4 @@ if __name__ == "__main__":
 
     from ..models import Brand, Product, PriceList, Supplier, ProductBase, CurrencyRate
 
-    main(  )
+    main()
