@@ -178,6 +178,22 @@ class Order(models.Model):
         return self.total_retail_price - self.total_purchase_price
 
 
+class Cabinet(models.Model):
+    """Модель для кабинетов/магазинов, откуда отгружаются товары"""
+
+    code = models.CharField(max_length=20, unique=True, verbose_name=_("Код"))
+    name = models.CharField(max_length=100, verbose_name=_("Название"))
+    is_active = models.BooleanField(default=True, verbose_name=_("Активен"))
+
+    class Meta:
+        verbose_name = _("Кабинет/Магазин")
+        verbose_name_plural = _("Кабинеты/Магазины")
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class OrderItem(models.Model):
     order = models.ForeignKey(
         "Order", on_delete=models.CASCADE, related_name="items", verbose_name=_("Заказ")
@@ -199,6 +215,14 @@ class OrderItem(models.Model):
         decimal_places=2,
         default=Decimal("1.00"),
         verbose_name="Количество",
+    )
+    cabinet = models.ForeignKey(
+        "Cabinet",
+        on_delete=models.PROTECT,
+        related_name="order_items",
+        verbose_name=_("Кабинет/Магазин"),
+        null=True,
+        blank=True,
     )
     retail_price = models.DecimalField(
         max_digits=10,

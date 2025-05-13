@@ -7,6 +7,8 @@ from django.http import HttpResponseRedirect
 from rangefilter.filters import DateRangeFilter  # Импорт фильтра диапазона
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from django.template.response import TemplateResponse
+from django.forms.widgets import Select
+
 from decimal import Decimal
 
 from django import forms
@@ -21,6 +23,7 @@ from .models import (
     Customer,
     DeliveryService,
     OrderStatus,
+    Cabinet,
 )
 from .admin_site import perfume_admin_site  # Импорт кастомного сайта
 from .utils.pluralize_russian import pluralize_russian as pluralize  # Импорт функции
@@ -193,6 +196,7 @@ class OrderItemInline(admin.TabularInline):
     fields = [
         "product",
         "supplier",
+        "cabinet",
         "quantity",
         "retail_price",
         "purchase_price_usd",
@@ -215,12 +219,22 @@ class OrderItemInline(admin.TabularInline):
     def get_extra(self, request, obj=None, **kwargs):
         return 1 if obj is None else 0
 
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        # Переопределяем метод для фильтрации queryset для полей ForeignKey
+        if db_field.name == "cabinet":
+            kwargs["queryset"] = Cabinet.objects.filter(is_active=True)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
     def formfield_for_dbfield(self, db_field, **kwargs):
         formfield = super().formfield_for_dbfield(db_field, **kwargs)
         if db_field.name == "quantity":
             # Ensure quantity is treated as Decimal
             formfield.widget.attrs["step"] = "1"
             formfield.widget.attrs["min"] = "1"
+        # Изменяем виджет для поля cabinet
+        if db_field.name == "cabinet":
+            # Используем простой Select виджет без редактирования
+            formfield.widget = Select(choices=formfield.widget.choices)
         return formfield
 
 
@@ -239,7 +253,8 @@ class OrderAdmin(admin.ModelAdmin):
         "date",
         "get_products",
         "get_suppliers",
-        "get_retail_price",
+        "get_cabinets",
+        # "get_retail_price", # Можно даже заменить на столбец с Розничная цена (рубли)(в целом он не нужен там
         "get_purchase_price_usd",
         "get_purchase_price_rub",
         "get_profit",
@@ -255,6 +270,7 @@ class OrderAdmin(admin.ModelAdmin):
         "status",
         "delivery_service",
         "items__supplier",
+        "items__cabinet",
     ]
 
     search_fields = [
@@ -306,6 +322,20 @@ class OrderAdmin(admin.ModelAdmin):
         return format_html("<br>".join(products))
 
     get_products.short_description = "Наименование товара"
+
+    def get_cabinets(self, obj):
+        """Отображает кабинеты для товаров в заказе"""
+        if not obj.items.exists():
+            return "-"
+        cabinets = []
+        for item in obj.items.all():
+            if item.cabinet:
+                cabinets.append(f"{item.cabinet.name}")
+            else:
+                cabinets.append("-")
+        return format_html("<br>".join(cabinets))
+
+    get_cabinets.short_description = "Магазин"
 
     def get_suppliers(self, obj):
         if not obj.items.exists():
@@ -415,6 +445,38 @@ class OrderProductAdmin(admin.ModelAdmin):
         return False
 
 
+class CabinetAdmin(admin.ModelAdmin):
+    list_display = ["name", "code", "is_active"]
+    search_fields = ["name", "code"]
+    list_filter = ["is_active"]
+
+    def changelist_view(self, request, extra_context=None):
+        count = self.model.objects.count()
+        extra_context = extra_context or {}
+        original_verbose_name_plural = self.model._meta.verbose_name_plural
+
+        plural_text = pluralize(count, "Кабинет", "Кабинета", "Кабинетов")
+
+        extra_context["title"] = plural_text
+
+        response = super().changelist_view(request, extra_context=extra_context)
+
+        # Меняем значение для нижней части списка
+        self.model._meta.verbose_name_plural = plural_text.split(" ", 1)[1]
+
+        # Возвращаем значение после формирования ответа
+        if isinstance(response, TemplateResponse):
+            response.add_post_render_callback(
+                lambda r: setattr(
+                    self.model._meta,
+                    "verbose_name_plural",
+                    original_verbose_name_plural,
+                )
+            )
+
+        return response
+
+
 class CustomerAdmin(admin.ModelAdmin):
     actions = None  # Убирает раздел "Действие"
 
@@ -480,7 +542,7 @@ class OrderItemAdminForm(forms.ModelForm):
 
 class OrderItemAdmin(admin.ModelAdmin):
     form = OrderItemAdminForm
-    list_display = ["product", "supplier", "quantity", "retail_price"]
+    list_display = ["product", "supplier", "cabinet", "quantity", "retail_price"]
 
     def response_add(self, request, obj, post_url_continue=None):
         """Handle response after adding new OrderItem"""
@@ -528,3 +590,4 @@ perfume_admin_site.register(Customer, CustomerAdmin)
 perfume_admin_site.register(DeliveryService, DeliveryServiceAdmin)
 perfume_admin_site.register(OrderStatus, OrderStatusAdmin)
 perfume_admin_site.register(OrderItem, OrderItemAdmin)
+perfume_admin_site.register(Cabinet, CabinetAdmin)
