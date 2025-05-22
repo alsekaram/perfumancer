@@ -287,15 +287,26 @@ def extract_gender(text: str) -> str:
     return ""
 
 
+# ─── стало ────────────────────────────────────────────────────────
+_extra_re = re.compile(
+    r"\b(?:" + "|".join(map(re.escape, EXTRA_INFO_WORDS)) + r")\b",
+    flags=re.IGNORECASE,
+)
+
+
 def clean_extra_info(text: str) -> str:
-    text = re.sub(r"\[.*?\]", "", text)  # убираем [ ... ]
-    text = re.sub(r'[\"""\']+', "", text)  # кавычки
-    text = re.sub(r"^\s*:", "", text)  # удаляем двоеточие в начале строки
-    text = re.sub(
-        r"№\s+(\d+)", r"№\1", text
-    )  # склеиваем № и число, если между ними пробел
-    for w in EXTRA_INFO_WORDS:
-        text = re.sub(rf"\b{w}\b", "", text)
+    """
+    Убирает кавычки, [скобки] и «мусорные» слова из EXTRA_INFO_WORDS
+    за ОДИН проход по строке.
+    """
+    text = re.sub(r"\[.*?\]", "", text)
+    text = re.sub(r'[\"""\']+', "", text)
+    text = re.sub(r"^\s*:", "", text)
+    text = re.sub(r"№\s+(\d+)", r"№\1", text)
+
+    # новый быстрый вызов
+    text = _extra_re.sub("", text)
+
     return re.sub(r"\s+", " ", text).strip()
 
 
