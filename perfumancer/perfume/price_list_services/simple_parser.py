@@ -256,21 +256,25 @@ def process_price_list(file_path):
     # Убираем строки без названия
     df = df.dropna(subset=[name_col]).reset_index(drop=True)
 
-    for word in GARBAGE_WORDS:
-        df = df[
-            ~df[name_col].astype(str).str.lower().str.contains(word.lower(), na=False)
-        ]
+    # Чистим мусор
+    garbage_pattern = re.compile(
+        r"\b(?:" + "|".join(map(re.escape, GARBAGE_WORDS)) + r")\b", flags=re.IGNORECASE
+    )
+    mask = df[name_col].astype(str).str.contains(garbage_pattern, na=False, regex=True)
+    df = df[~mask]  # копируем DataFrame ровно один раз
 
-    for word in EXTRA_INFO_WORDS:
-        df[name_col] = (
-            df[name_col].astype(str).apply(lambda x: re.sub(rf"\b{word}\b", "", x))
-        )
+    # Чистим ячейки от «лишней» информации
+    extra_pattern = re.compile(
+        r"\b(?:" + "|".join(map(re.escape, EXTRA_INFO_WORDS)) + r")\b",
+        flags=re.IGNORECASE,
+    )
 
-    # Удаление "fragrance world " из начала имени товара (с учетом регистра)
     df[name_col] = (
         df[name_col]
         .astype(str)
-        .apply(lambda x: x[16:] if x.lower().startswith("fragrance world ") else x)
+        .str.replace(extra_pattern, "", regex=True)  # одно векторное применение
+        .str.replace(r"\s{2,}", " ", regex=True)  # убираем двойные пробелы
+        .str.strip()
     )
 
     # Обработка брендов
