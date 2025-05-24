@@ -428,6 +428,26 @@ class OrderAdmin(admin.ModelAdmin):
     def changelist_view(self, request, extra_context=None):
         count = Order.objects.count()
         extra_context = extra_context or {}
+
+        if "customer__id__exact" in request.GET:
+            try:
+                customer_id = request.GET["customer__id__exact"]
+                customer = Customer.objects.get(id=customer_id)
+
+                from django.contrib import messages
+
+                messages.info(
+                    request,
+                    format_html(
+                        "Показаны заказы покупателя: <strong>{}</strong>. "
+                        '<a href="{}">Сбросить фильтр</a>',
+                        customer.name,
+                        reverse("admin:perfume_order_changelist"),
+                    ),
+                )
+            except (Customer.DoesNotExist, ValueError):
+                pass
+
         original_verbose_name_plural = self.model._meta.verbose_name_plural
 
         plural_text = pluralize(count, "Заказ", "Заказа", "Заказов")
