@@ -406,7 +406,24 @@ class OrderAdmin(admin.ModelAdmin):
     def get_customer_info(self, obj):
         if not obj.customer:
             return "-"
-        return format_html("{}, тел: {}", obj.customer.name, obj.customer.phone)
+
+        # URL для фильтрации заказов по покупателю
+        url = (
+            reverse("admin:perfume_order_changelist")
+            + f"?customer__id__exact={obj.customer.id}"
+        )
+
+        # Кликабельное имя покупателя
+        customer_link = format_html(
+            '<a href="{}" title="Показать все заказы покупателя">{}</a>',
+            url,
+            obj.customer.name,
+        )
+
+        return format_html("{}, тел: {}", customer_link, obj.customer.phone or "-")
+
+    get_customer_info.short_description = "Контактные данные"
+    get_customer_info.allow_tags = True
 
     def changelist_view(self, request, extra_context=None):
         count = Order.objects.count()
