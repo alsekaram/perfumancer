@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils.html import format_html
 from django.http import HttpResponseRedirect
 from rangefilter.filters import DateRangeFilter  # Импорт фильтра диапазона
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Max
 from django.template.response import TemplateResponse
 from django.forms.widgets import Select
 
@@ -495,36 +495,87 @@ class CabinetAdmin(admin.ModelAdmin):
 
 
 class CustomerAdmin(admin.ModelAdmin):
-    actions = None  # Убирает раздел "Действие"
-
-    list_display = ["name", "phone"]
+    actions = None
+    list_display = [
+        "name",
+        "phone",
+        "get_orders_info",
+        "get_last_order_date",
+        "get_total_spent",
+    ]
     search_fields = ["name", "phone"]
+    ordering = ["name"]  # Сортировка по умолчанию
 
-    def changelist_view(self, request, extra_context=None):
-        count = self.model.objects.count()
-        original_verbose_name_plural = self.model._meta.verbose_name_plural
+    # Для autocomplete
+    def get_search_results(self, request, queryset, search_term):
+        queryset, use_distinct = super().get_search_results(
+            request, queryset, search_term
+        )
 
-        plural_text = pluralize(count, "Покупатель", "Покупателя", "Покупателей")
+        # Аннотируем количеством заказов
+        queryset = queryset.annotate(orders_count=Count("orders"))
 
-        extra_context = extra_context or {}
-        extra_context["title"] = plural_text
+        return queryset, use_distinct
 
-        response = super().changelist_view(request, extra_context=extra_context)
+    # Переопределяем отображение в autocomplete
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # Всегда аннотируем количеством заказов
+        return qs.annotate(
+            orders_count=Count("orders"),
+            last_order_date=Max("orders__date"),
+            total_spent=Sum(
+                F("orders__items__retail_price") * F("orders__items__quantity")
+            ),
+        )
 
-        # Меняем значение для нижней части списка
-        self.model._meta.verbose_name_plural = plural_text.split(" ", 1)[1]
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .annotate(
+                orders_count=Count("orders"),
+                last_order_date=Max("orders__date"),
+                total_spent=Sum(
+                    F("orders__items__retail_price") * F("orders__items__quantity")
+                ),
+            )
+        )
 
-        # Возвращаем значение после формирования ответа
-        if isinstance(response, TemplateResponse):
-            response.add_post_render_callback(
-                lambda r: setattr(
-                    self.model._meta,
-                    "verbose_name_plural",
-                    original_verbose_name_plural,
-                )
+    def get_orders_info(self, obj):
+        count = obj.orders_count
+        if count > 0:
+            # URL для перехода к отфильтрованным заказам
+            orders_url = (
+                reverse("admin:perfume_order_changelist")
+                + f"?customer__id__exact={obj.id}"
             )
 
-        return response
+            return format_html(
+                '<a href="{}">{}</a>',
+                orders_url,
+                pluralize(count, "заказ", "заказа", "заказов"),
+            )
+        return format_html('<span style="color: #999;">Нет заказов</span>')
+
+    get_orders_info.short_description = "Заказы"
+    get_orders_info.admin_order_field = "orders_count"  # Делаем колонку сортируемой
+
+    def get_last_order_date(self, obj):
+        if obj.last_order_date:
+            return obj.last_order_date.strftime("%d.%m.%Y")
+        return "-"
+
+    get_last_order_date.short_description = "Последний заказ"
+    get_last_order_date.admin_order_field = "last_order_date"  # Делаем сортируемой
+
+    def get_total_spent(self, obj):
+        if obj.total_spent:
+            return f"{obj.total_spent:,.2f} ₽"
+        return "0 ₽"
+
+    get_total_spent.short_description = "Сумма покупок"
+    get_total_spent.admin_order_field = "total_spent"  # Делаем сортируемой
 
 
 class DeliveryServiceAdmin(admin.ModelAdmin):

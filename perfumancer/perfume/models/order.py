@@ -65,6 +65,9 @@ class Customer(models.Model):
         verbose_name_plural = _("Покупатели")
 
     def __str__(self):
+        # Проверяем, есть ли аннотация orders_count
+        if hasattr(self, "orders_count") and self.orders_count > 0:
+            return f"{self.name} - {self.orders_count}"
         return self.name
 
 
