@@ -24,6 +24,7 @@
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
+        margin-bottom: 20px;
     }
     
     .period-btn {
@@ -59,19 +60,22 @@
         border-radius: 8px;
         padding: 20px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        text-align: center;
     }
     
     .metric-card h3 {
-        margin: 0 0 10px 0;
+        margin: 0 0 15px 0;
         color: #666;
         font-size: 14px;
         text-transform: uppercase;
+        font-weight: normal;
     }
     
     .metric-value {
-        font-size: 28px;
+        font-size: 32px;
         font-weight: bold;
         color: #333;
+        line-height: 1.2;
     }
     
     .metric-card.sales { border-left: 4px solid #28a745; }
@@ -85,12 +89,66 @@
         margin-bottom: 20px;
     }
     
-    .debug-info {
-        background: #f0f0f0;
-        padding: 10px;
-        margin: 20px 0;
+    .custom-date-range {
+        border-top: 1px solid #e0e0e0;
+        padding-top: 15px;
+        margin-top: 20px;
+    }
+    
+    .date-range-form {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .date-input-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .date-input {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
         border-radius: 4px;
-        font-size: 12px;
+        font-size: 14px;
+        width: 150px;
+    }
+    
+    .date-input:focus {
+        outline: none;
+        border-color: #417690;
+        box-shadow: 0 0 0 2px rgba(65, 118, 144, 0.1);
+    }
+    
+    .apply-btn {
+        padding: 8px 20px;
+        background: #417690;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.3s;
+    }
+    
+    .apply-btn:hover {
+        background: #205067;
+    }
+    
+    .date-label {
+        font-weight: 500;
+        color: #333;
+    }
+    
+    .custom-date-title {
+        text-align: center;
+        margin: 0 0 15px 0;
+        color: #333;
+        font-size: 16px;
+        font-weight: normal;
     }
 </style>
 {% endblock %}
@@ -105,11 +163,9 @@
 {% endblock %}
 
 {% block content %}
-
 <div class="analytics-container">
     <!-- Фильтр по периодам -->
     <div class="period-filter">
-        <h3>Выберите период:</h3>
         <div class="period-buttons">
             <a href="?period=day" class="period-btn {% if period == 'day' %}active{% endif %}">
                 День
@@ -133,6 +189,41 @@
                 Все время
             </a>
         </div>
+        
+        <div class="custom-date-range">
+            <h4 class="custom-date-title">Или выберите произвольный период:</h4>
+            <form method="get" action="" class="date-range-form">
+                <div class="date-input-group">
+                    <label for="date_from" class="date-label">С:</label>
+                    <input type="date"
+                           id="date_from"
+                           name="date__gte"
+                           value="{{ date_from }}"
+                           class="date-input"
+                           placeholder="дд.мм.гггг">
+                </div>
+
+                <div class="date-input-group">
+                    <label for="date_to" class="date-label">По:</label>
+                    <input type="date"
+                           id="date_to"
+                           name="date__lte"
+                           value="{{ date_to }}"
+                           class="date-input"
+                           placeholder="дд.мм.гггг">
+                </div>
+
+                <button type="submit" class="apply-btn">
+                    Применить
+                </button>
+
+                {% if period == 'custom' %}
+                <a href="?" style="color: #dc3545; text-decoration: none; font-size: 14px;">
+                    ✕ Сбросить
+                </a>
+                {% endif %}
+            </form>
+        </div>
     </div>
     
     <!-- Информация о периоде -->
@@ -148,43 +239,19 @@
     <!-- Метрики -->
     <div class="metrics-grid">
         <div class="metric-card sales">
-            <h3>Продажи (РУБ)</h3>
+            <h3>ПРОДАЖИ (РУБ)</h3>
             <div class="metric-value">{{ total_sales_rub|floatformat:2 }} ₽</div>
         </div>
         
         <div class="metric-card purchases-usd">
-            <h3>Закупки (USD)</h3>
+            <h3>ЗАКУПКИ (USD)</h3>
             <div class="metric-value">${{ total_purchases_usd|floatformat:2 }}</div>
         </div>
         
-<!--        <div class="metric-card purchases-rub">-->
-<!--            <h3>Закупки (РУБ)</h3>-->
-<!--            <div class="metric-value">{{ total_purchases_rub|floatformat:2 }} ₽</div>-->
-<!--        </div>-->
-        
         <div class="metric-card profit">
-            <h3>Прибыль (РУБ)</h3>
+            <h3>ПРИБЫЛЬ (РУБ)</h3>
             <div class="metric-value">{{ total_profit|floatformat:2 }} ₽</div>
         </div>
     </div>
-    
-<!--    &lt;!&ndash; Дополнительные действия &ndash;&gt;-->
-<!--    <div class="actions">-->
-<!--        <a href="{% url 'admin:perfume_order_changelist' %}" class="button default">-->
-<!--            Перейти к заказам-->
-<!--        </a>-->
-<!--    </div>-->
-    
-<!--    {% if user.is_superuser %}-->
-<!--    &lt;!&ndash; Диагностическая информация (только для суперпользователя) &ndash;&gt;-->
-<!--    <div class="debug-info">-->
-<!--        <h4>Диагностическая информация:</h4>-->
-<!--        <p>Всего заказов в выбранном периоде: {{ debug_info.total_orders }}</p>-->
-<!--        <p>Всего позиций товаров: {{ debug_info.total_items }}</p>-->
-<!--        <p>Позиций с розничной ценой: {{ debug_info.has_retail_prices }}</p>-->
-<!--        <p>Позиций с ценой закупки USD: {{ debug_info.has_purchase_usd }}</p>-->
-<!--        <p>Позиций с ценой закупки РУБ: {{ debug_info.has_purchase_rub }}</p>-->
-<!--    </div>-->
-<!--    {% endif %}-->
 </div>
 {% endblock %}

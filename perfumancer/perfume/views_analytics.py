@@ -2,7 +2,7 @@ from django.utils import timezone
 from django.db.models import Sum, F, Q, DecimalField, Count
 from django.shortcuts import render
 from django.contrib.admin.views.decorators import staff_member_required
-from datetime import timedelta
+from datetime import timedelta, datetime
 from decimal import Decimal
 
 from .models import Order, OrderItem, OrderStatus
@@ -17,20 +17,39 @@ def financial_analytics(request):
     period = request.GET.get('period', 'all')
     include_all_statuses = request.GET.get('all_statuses', 'true') == 'true'
     
-    # Определяем дату начала в зависимости от периода
+    # Получаем даты из параметров (для кастомного диапазона)
+    date_from = request.GET.get('date__gte')
+    date_to = request.GET.get('date__lte')
+    
+    # Определяем дату начала и конца
     end_date = timezone.now().date()
     start_date = None
     
-    period_mapping = {
-        'day': end_date,  # Сегодня
-        'week': end_date - timedelta(days=7),
-        'month': end_date - timedelta(days=30),
-        '3months': end_date - timedelta(days=90),
-        '6months': end_date - timedelta(days=180),
-        'year': end_date - timedelta(days=365),
-    }
-    
-    start_date = period_mapping.get(period)
+    # Если указан кастомный диапазон дат
+    if date_from or date_to:
+        period = 'custom'
+        if date_from:
+            try:
+                start_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+            except ValueError:
+                start_date = None
+        if date_to:
+            try:
+                end_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+            except ValueError:
+                end_date = timezone.now().date()
+    else:
+        # Стандартные периоды
+        period_mapping = {
+            'day': end_date,  # Сегодня
+            'week': end_date - timedelta(days=7),
+            'month': end_date - timedelta(days=30),
+            '3months': end_date - timedelta(days=90),
+            '6months': end_date - timedelta(days=180),
+            'year': end_date - timedelta(days=365),
+        }
+        
+        start_date = period_mapping.get(period)
     
     # Базовый queryset для заказов
     orders_qs = Order.objects.all()
@@ -44,8 +63,13 @@ def financial_analytics(request):
         if completed_statuses.exists():
             orders_qs = orders_qs.filter(status__in=completed_statuses)
     
-    if start_date:
+    # Фильтрация по датам
+    if start_date and end_date:
+        orders_qs = orders_qs.filter(date__gte=start_date, date__lte=end_date)
+    elif start_date:
         orders_qs = orders_qs.filter(date__gte=start_date)
+    elif end_date:
+        orders_qs = orders_qs.filter(date__lte=end_date)
     
     # Агрегация данных через OrderItem для корректного подсчета
     items_qs = OrderItem.objects.filter(order__in=orders_qs)
@@ -103,6 +127,8 @@ def financial_analytics(request):
         'end_date': end_date,
         'orders_count': orders_qs.count(),
         'debug_info': debug_info,
+        'date_from': date_from,
+        'date_to': date_to,
     }
     
     return render(request, 'admin/perfume/financial_analytics.html', context)
