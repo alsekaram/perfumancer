@@ -1,0 +1,190 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}Финансовая аналитика{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .analytics-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .period-filter {
+        background: #f8f8f8;
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 30px;
+    }
+    
+    .period-buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    
+    .period-btn {
+        padding: 8px 16px;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        text-decoration: none;
+        color: #333;
+        transition: all 0.3s;
+    }
+    
+    .period-btn:hover {
+        background: #e9e9e9;
+    }
+    
+    .period-btn.active {
+        background: #417690;
+        color: white;
+        border-color: #417690;
+    }
+    
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .metric-card {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .metric-card h3 {
+        margin: 0 0 10px 0;
+        color: #666;
+        font-size: 14px;
+        text-transform: uppercase;
+    }
+    
+    .metric-value {
+        font-size: 28px;
+        font-weight: bold;
+        color: #333;
+    }
+    
+    .metric-card.sales { border-left: 4px solid #28a745; }
+    .metric-card.purchases-usd { border-left: 4px solid #17a2b8; }
+    .metric-card.purchases-rub { border-left: 4px solid #6c757d; }
+    .metric-card.profit { border-left: 4px solid #ffc107; }
+    
+    .period-info {
+        text-align: center;
+        color: #666;
+        margin-bottom: 20px;
+    }
+    
+    .debug-info {
+        background: #f0f0f0;
+        padding: 10px;
+        margin: 20px 0;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block coltype %}colMS{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; Финансовая аналитика
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="analytics-container">
+    <!-- Фильтр по периодам -->
+    <div class="period-filter">
+        <h3>Выберите период:</h3>
+        <div class="period-buttons">
+            <a href="?period=day" class="period-btn {% if period == 'day' %}active{% endif %}">
+                День
+            </a>
+            <a href="?period=week" class="period-btn {% if period == 'week' %}active{% endif %}">
+                Неделя
+            </a>
+            <a href="?period=month" class="period-btn {% if period == 'month' %}active{% endif %}">
+                Месяц
+            </a>
+            <a href="?period=3months" class="period-btn {% if period == '3months' %}active{% endif %}">
+                3 месяца
+            </a>
+            <a href="?period=6months" class="period-btn {% if period == '6months' %}active{% endif %}">
+                6 месяцев
+            </a>
+            <a href="?period=year" class="period-btn {% if period == 'year' %}active{% endif %}">
+                Год
+            </a>
+            <a href="?period=all" class="period-btn {% if period == 'all' %}active{% endif %}">
+                Все время
+            </a>
+        </div>
+    </div>
+    
+    <!-- Информация о периоде -->
+    <div class="period-info">
+        {% if period == 'all' %}
+            <p>Показаны данные за все время</p>
+        {% else %}
+            <p>Период: {{ start_date|date:"d.m.Y" }} - {{ end_date|date:"d.m.Y" }}</p>
+        {% endif %}
+        <p>Количество заказов: {{ orders_count }}</p>
+    </div>
+    
+    <!-- Метрики -->
+    <div class="metrics-grid">
+        <div class="metric-card sales">
+            <h3>Продажи (РУБ)</h3>
+            <div class="metric-value">{{ total_sales_rub|floatformat:2 }} ₽</div>
+        </div>
+        
+        <div class="metric-card purchases-usd">
+            <h3>Закупки (USD)</h3>
+            <div class="metric-value">${{ total_purchases_usd|floatformat:2 }}</div>
+        </div>
+        
+<!--        <div class="metric-card purchases-rub">-->
+<!--            <h3>Закупки (РУБ)</h3>-->
+<!--            <div class="metric-value">{{ total_purchases_rub|floatformat:2 }} ₽</div>-->
+<!--        </div>-->
+        
+        <div class="metric-card profit">
+            <h3>Прибыль (РУБ)</h3>
+            <div class="metric-value">{{ total_profit|floatformat:2 }} ₽</div>
+        </div>
+    </div>
+    
+<!--    &lt;!&ndash; Дополнительные действия &ndash;&gt;-->
+<!--    <div class="actions">-->
+<!--        <a href="{% url 'admin:perfume_order_changelist' %}" class="button default">-->
+<!--            Перейти к заказам-->
+<!--        </a>-->
+<!--    </div>-->
+    
+<!--    {% if user.is_superuser %}-->
+<!--    &lt;!&ndash; Диагностическая информация (только для суперпользователя) &ndash;&gt;-->
+<!--    <div class="debug-info">-->
+<!--        <h4>Диагностическая информация:</h4>-->
+<!--        <p>Всего заказов в выбранном периоде: {{ debug_info.total_orders }}</p>-->
+<!--        <p>Всего позиций товаров: {{ debug_info.total_items }}</p>-->
+<!--        <p>Позиций с розничной ценой: {{ debug_info.has_retail_prices }}</p>-->
+<!--        <p>Позиций с ценой закупки USD: {{ debug_info.has_purchase_usd }}</p>-->
+<!--        <p>Позиций с ценой закупки РУБ: {{ debug_info.has_purchase_rub }}</p>-->
+<!--    </div>-->
+<!--    {% endif %}-->
+</div>
+{% endblock %}
