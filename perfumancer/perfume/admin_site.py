@@ -25,8 +25,15 @@ class PerfumeAdminSite(AdminSite):
         return request.user.is_active and request.user.is_staff
 
     def get_urls(self):
+        from .views_analytics import financial_analytics
+
         urls = super().get_urls()
         custom_urls = [
+            path(
+                "analytics/",
+                self.admin_view(financial_analytics),
+                name="financial_analytics",
+            ),
             path(
                 "renew-prices/",
                 self.admin_view(views.renew_prices),
@@ -63,6 +70,22 @@ class PerfumeAdminSite(AdminSite):
                     )
                 )
                 break  # Выходим из цикла, если нашли нужное приложение
+        # Добавляем пункт "Финансовая аналитика"
+        analytics_item = {
+            "name": "Finance",
+            "app_label": "analytics",
+            "app_url": reverse("perfume:financial_analytics"),
+            "models": [
+                {
+                    "name": "Сводки",
+                    "object_name": "FinancialAnalytics",
+                    "admin_url": reverse("perfume:financial_analytics"),
+                    "view_only": True,
+                }
+            ],
+        }
+
+        app_list.append(analytics_item)
         return app_list
 
 
