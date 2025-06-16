@@ -8,6 +8,7 @@ from .order import (
     Cabinet,
 )
 from .price_list import Supplier, Brand, Product, ProductBase, PriceList, CurrencyRate
+from .receipt import Receipt, ReceiptItem, ReceiptStatus
 
 __all__ = [
     "Order",
@@ -23,4 +24,7 @@ __all__ = [
     "DeliveryService",
     "OrderStatus",
     "Cabinet",
+    "Receipt",
+    "ReceiptItem",
+    "ReceiptStatus",
 ]

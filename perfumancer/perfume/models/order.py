@@ -144,6 +144,10 @@ class Order(models.Model):
             )
         return ", ".join(summary)
 
+    def get_receipts_by_supplier(self):
+        """Возвращает приходы, сгруппированные по поставщикам"""
+        return self.receipts.all().select_related("supplier", "status", "cabinet")
+
     def _get_cached_items(self):
         """Helper method to cache and return order items"""
         if not hasattr(self, "_cached_items"):
@@ -151,13 +155,17 @@ class Order(models.Model):
         return self._cached_items
 
     def __str__(self):
-        return (
-            f"Заказ #{self.id}\n"
-            f"Статус: {self.status.name}\n"
-            f"Клиент: {self.customer.name}\n"
-            f"Товары: {self.get_items_summary()}\n"
-            f"Итого: {self.total_retail_price} ₽"
-        )
+        # Вариант 1: Очень краткий формат
+        # return f"Заказ #{self.id} - {self.customer.name}"
+
+        # Вариант 2: С датой
+        # return f"Заказ #{self.id} от {self.date.strftime('%d.%m.%Y')} - {self.customer.name}"
+
+        # Вариант 3: С датой и статусом
+        return f"Заказ #{self.id} - {self.customer.name} от {self.date.strftime('%d.%m.%Y')} ({self.status.name})"
+
+        # Вариант 4: С суммой заказа
+        # return f"Заказ #{self.id} - {self.customer.name} ({self.total_retail_price} ₽)"
 
     @property
     def total_retail_price(self):
@@ -179,6 +187,20 @@ class Order(models.Model):
         if not items:
             return Decimal("0.00")
         return self.total_retail_price - self.total_purchase_price
+
+    @property
+    def has_receipts(self):
+        """Проверяет, есть ли приходы для заказа"""
+        return self.receipts.exists()
+
+    @property
+    def receipts_status_summary(self):
+        """Возвращает сводку по статусам приходов"""
+        if not self.has_receipts:
+            return "Нет приходов"
+
+        statuses = self.receipts.values_list("status__name", flat=True)
+        return ", ".join(set(statuses))
 
 
 class Cabinet(models.Model):
@@ -245,6 +267,19 @@ class OrderItem(models.Model):
         verbose_name=_("Цена закупки (в рублях)"),
         validators=[MinValueValidator(Decimal("0.01"))],
     )
+
+    def get_first_receipt_link(self):
+        """Возвращает ссылку на первый приход для этой позиции"""
+        receipt_item = self.receipt_items.first()
+        if receipt_item:
+            return receipt_item.receipt
+        return None
+
+    def get_all_receipt_links(self):
+        """Возвращает QuerySet всех приходов для этой позиции"""
+        from .receipt import Receipt
+
+        return Receipt.objects.filter(items__order_item=self).distinct()
 
     def clean(self):
         try:

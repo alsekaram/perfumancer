@@ -8,6 +8,7 @@ from rangefilter.filters import DateRangeFilter  # Импорт фильтра �
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Max
 from django.template.response import TemplateResponse
 from django.forms.widgets import Select
+from django.db.models import F, Sum, DecimalField, ExpressionWrapper
 
 from decimal import Decimal
 
@@ -24,6 +25,9 @@ from .models import (
     DeliveryService,
     OrderStatus,
     Cabinet,
+    Receipt,
+    ReceiptItem,
+    ReceiptStatus,
 )
 from .admin_site import perfume_admin_site  # Импорт кастомного сайта
 from .utils.pluralize_russian import pluralize_russian as pluralize  # Импорт функции
@@ -202,8 +206,9 @@ class OrderItemInline(admin.TabularInline):
         "purchase_price_usd",
         "purchase_price_rub",
         "get_profit",
+        "get_receipt_links",
     ]
-    readonly_fields = ["purchase_price_rub", "get_profit"]
+    readonly_fields = ["purchase_price_rub", "get_profit", "get_receipt_links"]
     autocomplete_fields = ["product"]
 
     def get_profit(self, obj):
@@ -237,6 +242,35 @@ class OrderItemInline(admin.TabularInline):
             formfield.widget = Select(choices=formfield.widget.choices)
         return formfield
 
+    def get_receipt_links(self, obj):
+        if not obj.pk:
+            return "-"
+
+        receipt_links = []
+        for receipt_item in obj.receipt_items.select_related(
+            "receipt", "receipt__status"
+        ).all():
+            receipt = receipt_item.receipt
+            url = reverse("admin:perfume_receipt_change", args=[receipt.id])
+            status_color = {
+                "draft": "#ffc107",  # желтый
+                "completed": "#28a745",  # зеленый
+                "cancelled": "#dc3545",  # красный
+            }.get(receipt.status.code, "#6c757d")
+
+            receipt_links.append(
+                format_html(
+                    '<a href="{}" style="color: {}; font-weight: bold;">Приход №{}</a> ({})',
+                    url,
+                    status_color,
+                    receipt.id,
+                    receipt.status.name,
+                )
+            )
+        return format_html("<br>".join(receipt_links)) if receipt_links else "-"
+
+    get_receipt_links.short_description = "Приходы"
+
 
 def order_detail(obj):
     url = reverse("admin_order_detail", args=[obj.id])
@@ -254,6 +288,7 @@ class OrderAdmin(admin.ModelAdmin):
         "get_products",
         "get_suppliers",
         "get_cabinets",
+        "get_receipts_info",
         # "get_retail_price", # Можно даже заменить на столбец с Розничная цена (рубли)(в целом он не нужен там
         "get_purchase_price_usd",
         "get_purchase_price_rub",
@@ -471,7 +506,89 @@ class OrderAdmin(admin.ModelAdmin):
 
         return response
 
-    get_customer_info.short_description = "Контактные данные"
+    def has_delete_permission(self, request, obj=None):
+        if obj:
+            # Проверяем наличие проведенных приходов
+            completed_receipts = obj.receipts.exclude(status__code="draft")
+            if completed_receipts.exists():
+                return False
+        return super().has_delete_permission(request, obj)
+
+    def delete_model(self, request, obj):
+        """Кастомное удаление с предварительной очисткой черновиков"""
+        # Удаляем черновики приходов
+        draft_receipts = obj.receipts.filter(status__code="draft")
+        draft_receipts.delete()
+
+        # Удаляем заказ
+        super().delete_model(request, obj)
+
+        from django.contrib import messages
+
+        messages.success(
+            request, f"Заказ #{obj.id} и связанные черновики приходов удалены"
+        )
+
+    def delete_queryset(self, request, queryset):
+        """Массовое удаление заказов"""
+        deleted_count = 0
+        errors = []
+
+        for order in queryset:
+            try:
+                # Удаляем черновики
+                draft_receipts = order.receipts.filter(status__code="draft")
+                draft_receipts.delete()
+
+                # Проверяем наличие других приходов
+                remaining_receipts = order.receipts.exclude(status__code="draft")
+                if remaining_receipts.exists():
+                    errors.append(f"Заказ #{order.id} имеет проведенные приходы")
+                    continue
+
+                order.delete()
+                deleted_count += 1
+
+            except Exception as e:
+                errors.append(f"Ошибка при удалении заказа #{order.id}: {str(e)}")
+
+        from django.contrib import messages
+
+        if deleted_count:
+            messages.success(request, f"Удалено заказов: {deleted_count}")
+        if errors:
+            messages.error(request, "Ошибки: " + "; ".join(errors))
+
+    def get_receipts_info(self, obj):
+        receipts = obj.receipts.all()
+        if not receipts:
+            if obj.status.code == "ordered":
+                return format_html(
+                    '<span style="color: #ffc107;">⏳ Ожидают создания</span>'
+                )
+            return "-"
+
+        receipt_links = []
+        for receipt in receipts:
+            url = reverse("admin:perfume_receipt_change", args=[receipt.id])
+            status_color = {
+                "draft": "#ffc107",
+                "completed": "#28a745",
+                "cancelled": "#dc3545",
+            }.get(receipt.status.code, "#6c757d")
+
+            receipt_links.append(
+                format_html(
+                    '<a href="{}" style="color: {};">№{}</a>',
+                    url,
+                    status_color,
+                    receipt.id,
+                )
+            )
+
+        return format_html(" | ".join(receipt_links))
+
+    get_receipts_info.short_description = "Приходы"
 
 
 class OrderProductAdmin(admin.ModelAdmin):
@@ -668,6 +785,167 @@ class OrderItemAdmin(admin.ModelAdmin):
         return False
 
 
+class ReceiptItemInline(admin.TabularInline):
+    model = ReceiptItem
+    extra = 0
+    fields = [
+        # "order_item",
+        "product_name",
+        "quantity_ordered",
+        "quantity_received",
+        "purchase_price_usd",
+        "purchase_price_rub",
+    ]
+
+    # raw_id_fields = ["order_item"]
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.status.code == "completed":
+            # Только для "проведенных" все поля readonly
+            return list(self.fields)
+        elif obj and obj.status.code == "cancelled":
+            # Для "отказанных" можно менять только статус (через родительский объект)
+            return list(self.fields)
+        return []  # Для черновиков все можно редактировать
+
+    def has_add_permission(self, request, obj=None):
+        # Добавление позиций только для черновиков
+        if obj and obj.status.code != "draft":
+            return False
+        return super().has_add_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        # Удаление позиций только для черновиков
+        if obj and obj.status.code != "draft":
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def get_extra(self, request, obj=None, **kwargs):
+        # Пустые строки только для черновиков
+        if obj and obj.status.code != "draft":
+            return 0
+        return 1 if obj is None else 0
+
+
+class ReceiptAdmin(admin.ModelAdmin):
+    list_display = [
+        "get_receipt_number",
+        "date",
+        "supplier",
+        "cabinet",
+        "get_order_link",
+        "invoice_number",
+        "invoice_date",
+        "get_status_display",
+        "get_items_count",
+        "get_total_amount",
+    ]
+
+    list_filter = ["status", "supplier", "cabinet", "date"]
+    search_fields = ["invoice_number", "order__id", "supplier__name"]
+    inlines = [ReceiptItemInline]
+
+    # Фиксированный порядок полей
+    fields = [
+        "date",
+        "supplier",
+        "cabinet",
+        "invoice_number",
+        "invoice_date",
+        "order",
+        "status",
+    ]
+
+    def get_receipt_number(self, obj):
+        return f"Приход №{obj.id}"
+
+    get_receipt_number.short_description = "Номер"
+
+    def get_order_link(self, obj):
+        if obj.order:
+            url = reverse("admin:perfume_order_change", args=[obj.order.id])
+            return format_html('<a href="{}">Заказ #{}</a>', url, obj.order.id)
+        return "Без заказа"
+
+    get_order_link.short_description = "Заказ"
+
+    def get_items_count(self, obj):
+        return obj.items.count()
+
+    get_items_count.short_description = "Позиций"
+
+    def get_total_amount(self, obj):
+        total = (
+            obj.items.aggregate(
+                total=Sum(
+                    ExpressionWrapper(
+                        F("quantity_received") * F("purchase_price_rub"),
+                        output_field=DecimalField(),
+                    )
+                )
+            )["total"]
+            or 0
+        )
+        return f"{total:,.2f} ₽"
+
+    get_total_amount.short_description = "Сумма"
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly = []
+
+        # Если это существующий объект
+        if obj:
+            # Заказ можно менять только у ручных приходов в статусе черновик
+            if obj.order or obj.status.code != "draft":
+                readonly.append("order")
+            readonly.append("date")
+
+            # Если приход не черновик, блокируем дополнительные поля
+            if obj.status.code != "draft":
+                readonly.extend(
+                    ["invoice_number", "invoice_date", "supplier", "cabinet"]
+                )
+
+        return readonly
+
+    def save_model(self, request, obj, form, change):
+        """Переопределяем сохранение модели для обработки ручных приходов"""
+        super().save_model(request, obj, form, change)
+
+    def save_formset(self, request, form, formset, change):
+        """Сохранение позиций прихода"""
+        instances = formset.save(commit=False)
+
+        for instance in instances:
+            # Для ручных приходов quantity_ordered может быть пустым
+            if not instance.quantity_ordered:
+                instance.quantity_ordered = instance.quantity_received
+            instance.save()
+
+        formset.save_m2m()
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.status.code != "draft":
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def get_status_display(self, obj):
+        """Отображение статуса с цветом"""
+        color_map = {
+            "draft": "#ffc107",  # желтый
+            "completed": "#28a745",  # зеленый
+            "cancelled": "#dc3545",  # красный
+        }
+        color = color_map.get(obj.status.code, "#6c757d")
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color,
+            obj.status.name,
+        )
+
+    get_status_display.short_description = "Статус"
+
+
 # Регистрация моделей в кастомной админке
 perfume_admin_site.register(Supplier, SupplierAdmin)
 perfume_admin_site.register(PriceList, PriceListAdmin)
@@ -679,3 +957,4 @@ perfume_admin_site.register(DeliveryService, DeliveryServiceAdmin)
 perfume_admin_site.register(OrderStatus, OrderStatusAdmin)
 perfume_admin_site.register(OrderItem, OrderItemAdmin)
 perfume_admin_site.register(Cabinet, CabinetAdmin)
+perfume_admin_site.register(Receipt, ReceiptAdmin)
