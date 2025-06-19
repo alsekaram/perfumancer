@@ -13,12 +13,16 @@ services:
   nginx:
     image: nginx:1.25.5
     restart: always
-    volumes:
-      - ./config/nginx:/etc/nginx/templates
-      - .:/code
     ports:
       - "80:80"
       - "443:443"
+    volumes:
+      # 1) Nginx-темплейты
+      - ./config/nginx:/etc/nginx/templates:ro
+      - .:/code
+      # 2) «Живой» сертификат LE → путь, который ждёт конфиг
+      - /etc/letsencrypt/live/perfumancer.ru/fullchain.pem:/code/perfumancer/ssl/fullchain.pem:ro
+      - /etc/letsencrypt/live/perfumancer.ru/privkey.pem:/code/perfumancer/ssl/privkey.pem:ro
 
   celery:
     build: .
@@ -32,7 +36,6 @@ services:
     depends_on:
       - redis
       - web
-
 
   redis:
     image: redis:latest
