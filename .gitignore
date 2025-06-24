@@ -168,3 +168,6 @@ saved_prices/
 output_prices/
 perfumancer/static
 .xlsx
+
+# Production-specific docker-compose files
+docker-compose.prod.yml

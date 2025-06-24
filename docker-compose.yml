@@ -17,12 +17,10 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      # 1) Nginx-темплейты
+      # Nginx-темплейты
       - ./config/nginx:/etc/nginx/templates:ro
       - .:/code
-      # 2) «Живой» сертификат LE → путь, который ждёт конфиг
-      - /etc/letsencrypt/live/perfumancer.ru/fullchain.pem:/code/perfumancer/ssl/fullchain.pem:ro
-      - /etc/letsencrypt/live/perfumancer.ru/privkey.pem:/code/perfumancer/ssl/privkey.pem:ro
+      # SSL сертификаты монтируются через docker-compose.prod.yml
 
   celery:
     build: .

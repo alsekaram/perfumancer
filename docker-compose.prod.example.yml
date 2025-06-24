@@ -1,0 +1,11 @@
+version: '3.8'
+
+# Пример файла для продакшн окружения
+# Скопируйте как docker-compose.prod.yml и измените пути к сертификатам
+
+services:
+  nginx:
+    volumes:
+      # SSL сертификаты Let's Encrypt (измените на ваши пути)
+      - /etc/letsencrypt/live/your-domain.com/fullchain.pem:/code/perfumancer/ssl/fullchain.pem:ro
+      - /etc/letsencrypt/live/your-domain.com/privkey.pem:/code/perfumancer/ssl/privkey.pem:ro 
