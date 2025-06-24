@@ -901,14 +901,14 @@ class ReceiptAdmin(admin.ModelAdmin):
             obj.items.aggregate(
                 total=Sum(
                     ExpressionWrapper(
-                        F("quantity_received") * F("purchase_price_rub"),
+                        F("quantity_received") * F("purchase_price_usd"),
                         output_field=DecimalField(),
                     )
                 )
             )["total"]
             or 0
         )
-        return f"{total:,.2f} ₽"
+        return f"${total:,.2f}"
 
     get_total_amount.short_description = "Сумма"
 
