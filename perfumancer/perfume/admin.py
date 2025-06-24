@@ -183,7 +183,7 @@ class CurrencyRateAdmin(admin.ModelAdmin):
         if CurrencyRate.objects.count() == 1:
             obj = CurrencyRate.objects.first()
             return HttpResponseRedirect(
-                reverse("admin:perfume_currencyrate_change", args=[obj.pk])
+                reverse("perfume:perfume_currencyrate_change", args=[obj.pk])
             )
         return super().changelist_view(request, extra_context)
 
@@ -251,7 +251,7 @@ class OrderItemInline(admin.TabularInline):
             "receipt", "receipt__status"
         ).all():
             receipt = receipt_item.receipt
-            url = reverse("admin:perfume_receipt_change", args=[receipt.id])
+            url = reverse("perfume:perfume_receipt_change", args=[receipt.id])
             status_color = {
                 "draft": "#ffc107",  # желтый
                 "completed": "#28a745",  # зеленый
@@ -273,7 +273,7 @@ class OrderItemInline(admin.TabularInline):
 
 
 def order_detail(obj):
-    url = reverse("admin_order_detail", args=[obj.id])
+    url = reverse("perfume:admin_order_detail", args=[obj.id])
     return mark_safe(f'<a href="{url}">Детали</a>')
 
 
@@ -348,7 +348,7 @@ class OrderAdmin(admin.ModelAdmin):
             return "-"
         products = []
         for item in obj.items.all():
-            url = reverse("admin:perfume_orderitem_change", args=[item.id])
+            url = reverse("perfume:perfume_orderitem_change", args=[item.id])
             products.append(
                 format_html(
                     '<a href="{}">{} ({}шт)</a>', url, item.product.name, item.quantity
@@ -444,7 +444,7 @@ class OrderAdmin(admin.ModelAdmin):
 
         # URL для фильтрации заказов по покупателю
         url = (
-            reverse("admin:perfume_order_changelist")
+            reverse("perfume:perfume_order_changelist")
             + f"?customer__id__exact={obj.customer.id}"
         )
 
@@ -477,7 +477,7 @@ class OrderAdmin(admin.ModelAdmin):
                         "Показаны заказы покупателя: <strong>{}</strong>. "
                         '<a href="{}">Сбросить фильтр</a>',
                         customer.name,
-                        reverse("admin:perfume_order_changelist"),
+                        reverse("perfume:perfume_order_changelist"),
                     ),
                 )
             except (Customer.DoesNotExist, ValueError):
@@ -570,7 +570,7 @@ class OrderAdmin(admin.ModelAdmin):
 
         receipt_links = []
         for receipt in receipts:
-            url = reverse("admin:perfume_receipt_change", args=[receipt.id])
+            url = reverse("perfume:perfume_receipt_change", args=[receipt.id])
             status_color = {
                 "draft": "#ffc107",
                 "completed": "#28a745",
@@ -684,7 +684,7 @@ class CustomerAdmin(admin.ModelAdmin):
         if count > 0:
             # URL для перехода к отфильтрованным заказам
             orders_url = (
-                reverse("admin:perfume_order_changelist")
+                reverse("perfume:perfume_order_changelist")
                 + f"?customer__id__exact={obj.id}"
             )
 
@@ -753,20 +753,20 @@ class OrderItemAdmin(admin.ModelAdmin):
         """Handle response after adding new OrderItem"""
         if "_continue" in request.POST:
             return super().response_add(request, obj, post_url_continue)
-        return HttpResponseRedirect(reverse("admin:perfume_order_changelist"))
+        return HttpResponseRedirect(reverse("perfume:perfume_order_changelist"))
 
     def response_change(self, request, obj):
         """Handle response after changing OrderItem"""
         if "_continue" in request.POST:
             return super().response_change(request, obj)
-        return HttpResponseRedirect(reverse("admin:perfume_order_changelist"))
+        return HttpResponseRedirect(reverse("perfume:perfume_order_changelist"))
 
     def response_delete(self, request, obj_display, obj_id):
         """
         Перенаправление после удаления объекта OrderItem.
         """
         # Всегда перенаправляем на список заказов
-        return HttpResponseRedirect(reverse("admin:perfume_order_changelist"))
+        return HttpResponseRedirect(reverse("perfume:perfume_order_changelist"))
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         """
@@ -836,6 +836,7 @@ class ReceiptAdmin(admin.ModelAdmin):
         "get_order_link",
         "invoice_number",
         "invoice_date",
+        "get_invoice_file",
         "get_status_display",
         "get_items_count",
         "get_total_amount",
@@ -852,6 +853,7 @@ class ReceiptAdmin(admin.ModelAdmin):
         "cabinet",
         "invoice_number",
         "invoice_date",
+        "invoice_file",
         "order",
         "status",
     ]
@@ -863,11 +865,31 @@ class ReceiptAdmin(admin.ModelAdmin):
 
     def get_order_link(self, obj):
         if obj.order:
-            url = reverse("admin:perfume_order_change", args=[obj.order.id])
+            url = reverse("perfume:perfume_order_change", args=[obj.order.id])
             return format_html('<a href="{}">Заказ #{}</a>', url, obj.order.id)
         return "Без заказа"
 
     get_order_link.short_description = "Заказ"
+    
+    def get_invoice_file(self, obj):
+        """Отображение файла накладной"""
+        if obj.invoice_file:
+            file_url = obj.invoice_file.url
+            file_name = obj.invoice_filename
+            # Определяем иконку в зависимости от расширения
+            if file_name.lower().endswith('.pdf'):
+                icon = '📄'
+            else:
+                icon = '🖼️'
+            return format_html(
+                '<a href="{}" target="_blank">{} {}</a>',
+                file_url,
+                icon,
+                file_name
+            )
+        return "-"
+    
+    get_invoice_file.short_description = "Файл"
 
     def get_items_count(self, obj):
         return obj.items.count()
@@ -903,7 +925,7 @@ class ReceiptAdmin(admin.ModelAdmin):
             # Если приход не черновик, блокируем дополнительные поля
             if obj.status.code != "draft":
                 readonly.extend(
-                    ["invoice_number", "invoice_date", "supplier", "cabinet"]
+                    ["invoice_number", "invoice_date", "invoice_file", "supplier", "cabinet"]
                 )
 
         return readonly

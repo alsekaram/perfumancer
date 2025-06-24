@@ -138,6 +138,10 @@ dmypy.json
 
 appeals_text.json
 
+# Media files
+media/
+perfumancer/media/
+
 # General
 .DS_Store
 .AppleDouble

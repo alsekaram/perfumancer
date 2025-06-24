@@ -1,9 +1,10 @@
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, FileExtensionValidator
 from django.core.exceptions import ValidationError
 from decimal import Decimal
+import os
 
 
 class ReceiptStatus(models.Model):
@@ -68,6 +69,20 @@ class Receipt(models.Model):
         related_name="receipts",
         verbose_name=_("Статус"),
     )
+    
+    # Новое поле для хранения файла накладной
+    invoice_file = models.FileField(
+        upload_to='receipts/invoices/%Y/%m/',
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff']
+            )
+        ],
+        null=True,
+        blank=True,
+        verbose_name=_("Файл накладной"),
+        help_text=_("Загрузите скан или фото накладной (PDF, JPG, PNG и др.)")
+    )
 
     class Meta:
         verbose_name = _("Приход")
@@ -79,6 +94,13 @@ class Receipt(models.Model):
             return f"Приход №{self.id} от {self.date.strftime('%d.%m.%Y')} (Заказ #{self.order.id})"
         else:
             return f"Приход №{self.id} от {self.date.strftime('%d.%m.%Y')} (Ручной)"
+    
+    @property
+    def invoice_filename(self):
+        """Возвращает только имя файла без пути"""
+        if self.invoice_file:
+            return os.path.basename(self.invoice_file.name)
+        return None
 
 
 class ReceiptItem(models.Model):
