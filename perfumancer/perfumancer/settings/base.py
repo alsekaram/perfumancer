@@ -146,15 +146,24 @@ AWS_S3_VERIFY = False  # Отключаем SSL проверку для совм
 AWS_QUERYSTRING_AUTH = True  # Используем подписанные URL
 AWS_QUERYSTRING_EXPIRE = 86400  # URL действительны 24 часа
 
-# Media files configuration (используем кастомный storage)
+# Media files configuration (изменяем с S3 URL на локальный путь)
+# В settings/base.py
+# S3 остается для хранения (как есть)
 if AWS_STORAGE_BUCKET_NAME:
-    # НЕ устанавливаем DEFAULT_FILE_STORAGE, используем кастомный storage в моделях
-    # DEFAULT_FILE_STORAGE будет использоваться только для совместимости
+    AWS_S3_ENDPOINT_URL = 'https://s3.ru-1.storage.selcloud.ru'
+    # НЕ меняем MEDIA_URL - пусть остается S3
     MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/' if AWS_S3_CUSTOM_DOMAIN else f'https://{AWS_STORAGE_BUCKET_NAME}.s3.ru-1.storage.selcloud.ru/'
 else:
-    # Локальное хранение файлов для разработки
     MEDIA_URL = '/media/'
     MEDIA_ROOT = BASE_DIR / 'media'
+
+# Новые настройки для локального кэша
+INVOICE_CACHE_ROOT = BASE_DIR / 'receipts' / 'invoices'
+INVOICE_CACHE_URL = '/cached-invoices/'
+INVOICE_CACHE_EXPIRES_DAYS = 30  # Храним кэш 30 дней
+
+# Создаем папку кэша
+INVOICE_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -162,3 +171,10 @@ else:
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Логирование отключено для упрощения системы
+
+# Локальный кэш для файлов с S3
+INVOICE_CACHE_ROOT = BASE_DIR / 'receipts' / 'invoices'
+INVOICE_CACHE_URL = '/cached-invoices/'
+
+# Убеждаемся что папка существует
+INVOICE_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
