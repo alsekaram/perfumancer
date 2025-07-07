@@ -31,6 +31,7 @@ from .models import (
 )
 from .admin_site import perfume_admin_site  # Импорт кастомного сайта
 from .utils.pluralize_russian import pluralize_russian as pluralize  # Импорт функции
+from .widgets import ProxyFileWidget
 
 
 class SupplierAdmin(admin.ModelAdmin):
@@ -836,7 +837,7 @@ class ReceiptAdmin(admin.ModelAdmin):
         "get_order_link",
         "invoice_number",
         "invoice_date",
-        "get_invoice_file",
+        "get_invoice_file",  # Возвращаем колонку с файлами
         "get_status_display",
         "get_items_count",
         "get_total_amount",
@@ -870,29 +871,41 @@ class ReceiptAdmin(admin.ModelAdmin):
         return "Без заказа"
 
     get_order_link.short_description = "Заказ"
-    
+
     def get_invoice_file(self, obj):
-        """Безопасное отображение файла накладной через proxy"""
+        """Отображение файла накладной через proxy URL в списке"""
         if obj.invoice_file:
-            # Используем proxy URL вместо прямого S3 URL
             proxy_url = obj.get_invoice_proxy_url()
             file_name = obj.invoice_filename
-            
+
             # Определяем иконку в зависимости от расширения
-            if file_name and file_name.lower().endswith('.pdf'):
-                icon = '📄'
+            if file_name and file_name.lower().endswith(".pdf"):
+                icon = "📄"
             else:
-                icon = '🖼️'
-            
+                icon = "🖼️"
+
             return format_html(
-                '<a href="{}" target="_blank" title="Файл через защищённый прокси">{} {} 🔒</a>',
-                proxy_url,
-                icon,
-                file_name
+                '<a href="{}" target="_blank">{} {}</a>', proxy_url, icon, file_name
             )
         return "-"
-    
+
     get_invoice_file.short_description = "Файл накладной"
+
+    def get_status_display(self, obj):
+        """Отображение статуса с цветом"""
+        color_map = {
+            "draft": "#ffc107",  # желтый
+            "completed": "#28a745",  # зеленый
+            "cancelled": "#dc3545",  # красный
+        }
+        color = color_map.get(obj.status.code, "#6c757d")
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color,
+            obj.status.name,
+        )
+
+    get_status_display.short_description = "Статус"
 
     def get_items_count(self, obj):
         return obj.items.count()
@@ -928,7 +941,13 @@ class ReceiptAdmin(admin.ModelAdmin):
             # Если приход не черновик, блокируем дополнительные поля
             if obj.status.code != "draft":
                 readonly.extend(
-                    ["invoice_number", "invoice_date", "invoice_file", "supplier", "cabinet"]
+                    [
+                        "invoice_number",
+                        "invoice_date",
+                        "invoice_file",
+                        "supplier",
+                        "cabinet",
+                    ]
                 )
 
         return readonly
@@ -954,21 +973,17 @@ class ReceiptAdmin(admin.ModelAdmin):
             return False
         return super().has_delete_permission(request, obj)
 
-    def get_status_display(self, obj):
-        """Отображение статуса с цветом"""
-        color_map = {
-            "draft": "#ffc107",  # желтый
-            "completed": "#28a745",  # зеленый
-            "cancelled": "#dc3545",  # красный
-        }
-        color = color_map.get(obj.status.code, "#6c757d")
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{}</span>',
-            color,
-            obj.status.name,
-        )
+    def get_form(self, request, obj=None, **kwargs):
+        """
+        Переопределяем форму для использования кастомного виджета
+        """
+        form = super().get_form(request, obj, **kwargs)
 
-    get_status_display.short_description = "Статус"
+        # Применяем кастомный виджет только для поля invoice_file
+        if "invoice_file" in form.base_fields:
+            form.base_fields["invoice_file"].widget = ProxyFileWidget()
+
+        return form
 
 
 # Регистрация моделей в кастомной админке
