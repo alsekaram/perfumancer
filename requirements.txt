@@ -32,3 +32,9 @@ xlrd==2.0.1
 uwsgi==2.0.25.1
 python-decouple==3.8
 redis==5.2.1
+
+# S3 storage dependencies
+django-storages==1.14.4
+boto3==1.35.0
+pillow-heif==0.20.0
+Pillow==10.4.0
