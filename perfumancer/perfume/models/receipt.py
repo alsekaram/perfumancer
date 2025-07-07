@@ -6,6 +6,26 @@ from django.core.exceptions import ValidationError
 from decimal import Decimal
 import os
 
+# Получаем приватный storage для файлов накладных
+def get_invoice_file_storage():
+    """
+    Возвращает приватный storage для файлов накладных
+    Обеспечивает безопасность и защиту конфиденциальных документов
+    """
+    from perfume.storages import get_private_file_storage
+    return get_private_file_storage()
+
+
+def process_invoice_file_upload(instance, filename):
+    """
+    Обработка загружаемого файла накладной с автоматической конвертацией HEIC
+    """
+    from perfume.utils.image_converter import convert_image_if_needed
+    
+    # Если это HEIC файл, он будет автоматически конвертирован в JPEG
+    # Конвертация происходит прозрачно для пользователя
+    return f'receipts/invoices/{timezone.now().strftime("%Y/%m")}/{filename}'
+
 
 class ReceiptStatus(models.Model):
     """Статусы для документов прихода"""
@@ -70,18 +90,19 @@ class Receipt(models.Model):
         verbose_name=_("Статус"),
     )
     
-    # Новое поле для хранения файла накладной
+    # Приватное поле для хранения файла накладной с автоматической конвертацией HEIC
     invoice_file = models.FileField(
-        upload_to='receipts/invoices/%Y/%m/',
+        upload_to=process_invoice_file_upload,
+        storage=get_invoice_file_storage(),
         validators=[
             FileExtensionValidator(
-                allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff']
+                allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'heic', 'heif']
             )
         ],
         null=True,
         blank=True,
         verbose_name=_("Файл накладной"),
-        help_text=_("Загрузите скан или фото накладной (PDF, JPG, PNG и др.)")
+        help_text=_("Загрузите скан или фото накладной (PDF, JPG, PNG, HEIC и др.). HEIC файлы автоматически конвертируются в JPEG. Файл сохраняется в защищенном хранилище.")
     )
 
     class Meta:
@@ -95,12 +116,50 @@ class Receipt(models.Model):
         else:
             return f"Приход №{self.id} от {self.date.strftime('%d.%m.%Y')} (Ручной)"
     
+    def save(self, *args, **kwargs):
+        """Переопределенное сохранение с автоматической конвертацией HEIC"""
+        
+        # Если загружается новый файл, проверяем необходимость конвертации
+        if self.invoice_file and hasattr(self.invoice_file, 'file'):
+            from perfume.utils.image_converter import convert_image_if_needed
+            
+            # Автоматически конвертируем HEIC в JPEG
+            converted_file = convert_image_if_needed(self.invoice_file)
+            if converted_file != self.invoice_file:
+                self.invoice_file = converted_file
+        
+        super().save(*args, **kwargs)
+    
     @property
     def invoice_filename(self):
         """Возвращает только имя файла без пути"""
         if self.invoice_file:
             return os.path.basename(self.invoice_file.name)
         return None
+    
+    @property
+    def is_image_file(self):
+        """Проверяет, является ли файл изображением"""
+        if not self.invoice_file:
+            return False
+        
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff']
+        filename = self.invoice_filename
+        if filename:
+            ext = os.path.splitext(filename.lower())[1]
+            return ext in image_extensions
+        return False
+    
+    @property
+    def is_pdf_file(self):
+        """Проверяет, является ли файл PDF"""
+        if not self.invoice_file:
+            return False
+        
+        filename = self.invoice_filename
+        if filename:
+            return filename.lower().endswith('.pdf')
+        return False
 
 
 class ReceiptItem(models.Model):
