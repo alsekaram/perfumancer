@@ -20,13 +20,55 @@ def get_invoice_file_storage():
 
 def process_invoice_file_upload(instance, filename):
     """
-    Обработка загружаемого файла накладной с автоматической конвертацией HEIC
+    Обработка загружаемого файла накладной с автоматическим именованием
+    Формат: дата_номер_id_кабинет_поставщик.расширение
     """
+    import re
     from perfume.utils.image_converter import convert_image_if_needed
-
-    # Если это HEIC файл, он будет автоматически конвертирован в JPEG
-    # Конвертация происходит прозрачно для пользователя
-    return f'receipts/invoices/{timezone.now().strftime("%Y/%m")}/{filename}'
+    
+    # Получаем расширение файла
+    file_extension = os.path.splitext(filename)[1].lower()
+    
+    # Базовые компоненты имени файла
+    date_str = instance.date.strftime("%Y_%m_%d") if instance.date else timezone.now().strftime("%Y_%m_%d")
+    receipt_id = f"receipt_{instance.id}" if instance.id else "receipt_new"
+    
+    # Добавляем номер накладной, если есть
+    invoice_part = ""
+    if instance.invoice_number:
+        # Очищаем номер накладной от специальных символов
+        clean_invoice = re.sub(r'[^\w\-_.]', '_', instance.invoice_number)
+        invoice_part = f"inv_{clean_invoice}"
+    
+    # Добавляем кабинет
+    cabinet_part = ""
+    if instance.cabinet_id:
+        cabinet_part = f"cab_{instance.cabinet_id}"
+    
+    # Добавляем поставщика (без префикса supplier)
+    supplier_part = ""
+    if instance.supplier_id:
+        try:
+            supplier_name = re.sub(r'[^\w\-_.]', '_', str(instance.supplier))[:20]  # Ограничиваем длину
+            supplier_part = supplier_name
+        except:
+            supplier_part = str(instance.supplier_id)
+    
+    # Формируем итоговое имя файла в порядке: дата_номер_id_кабинет_поставщик
+    filename_parts = []
+    filename_parts.append(date_str)  # дата
+    if invoice_part:  # номер накладной (если есть)
+        filename_parts.append(invoice_part)
+    filename_parts.append(receipt_id)  # id
+    if cabinet_part:  # кабинет
+        filename_parts.append(cabinet_part)
+    if supplier_part:  # поставщик
+        filename_parts.append(supplier_part)
+    
+    clean_filename = "_".join(filename_parts) + file_extension
+    
+    # Путь для хранения
+    return f'receipts/invoices/{timezone.now().strftime("%Y/%m")}/{clean_filename}'
 
 
 class ReceiptStatus(models.Model):

@@ -871,25 +871,29 @@ class ReceiptAdmin(admin.ModelAdmin):
         return "Без заказа"
 
     get_order_link.short_description = "Заказ"
-
+    
     def get_invoice_file(self, obj):
         """Отображение файла накладной через proxy URL в списке"""
         if obj.invoice_file:
             proxy_url = obj.get_invoice_proxy_url()
-            file_name = obj.invoice_filename
-
+            
             # Определяем иконку в зависимости от расширения
-            if file_name and file_name.lower().endswith(".pdf"):
-                icon = "📄"
+            if obj.is_pdf_file:
+                icon = '📄'
+                file_type = 'PDF'
             else:
-                icon = "🖼️"
-
+                icon = '🖼️'
+                file_type = 'Фото'
+            
             return format_html(
-                '<a href="{}" target="_blank">{} {}</a>', proxy_url, icon, file_name
+                '<a href="{}" target="_blank">{} {}</a>',
+                proxy_url,
+                icon,
+                file_type
             )
         return "-"
-
-    get_invoice_file.short_description = "Файл накладной"
+    
+    get_invoice_file.short_description = "Накладная"
 
     def get_status_display(self, obj):
         """Отображение статуса с цветом"""
@@ -941,13 +945,7 @@ class ReceiptAdmin(admin.ModelAdmin):
             # Если приход не черновик, блокируем дополнительные поля
             if obj.status.code != "draft":
                 readonly.extend(
-                    [
-                        "invoice_number",
-                        "invoice_date",
-                        "invoice_file",
-                        "supplier",
-                        "cabinet",
-                    ]
+                    ["invoice_number", "invoice_date", "invoice_file", "supplier", "cabinet"]
                 )
 
         return readonly
@@ -978,11 +976,11 @@ class ReceiptAdmin(admin.ModelAdmin):
         Переопределяем форму для использования кастомного виджета
         """
         form = super().get_form(request, obj, **kwargs)
-
+        
         # Применяем кастомный виджет только для поля invoice_file
-        if "invoice_file" in form.base_fields:
-            form.base_fields["invoice_file"].widget = ProxyFileWidget()
-
+        if 'invoice_file' in form.base_fields:
+            form.base_fields['invoice_file'].widget = ProxyFileWidget()
+            
         return form
 
 
