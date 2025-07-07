@@ -1,0 +1,36 @@
+services:
+  web:
+    build: .
+    command: ["python", "/code/perfumancer/manage.py", "runserver", "0.0.0.0:8000"]
+    restart: always
+    volumes:
+      - .:/code
+      - ./receipts:/code/receipts  # Для кэша файлов
+    environment:
+      - DJANGO_SETTINGS_MODULE=perfumancer.settings.local
+    depends_on:
+      - redis
+
+  nginx:
+    image: nginx:1.25.5
+    restart: always
+    ports:
+      - "8010:80"
+    volumes:
+      - ./config/nginx/dev.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - .:/code
+      - ./receipts:/code/receipts  # И в nginx тоже
+    environment:
+      - NGINX_HOST=localhost
+      - NGINX_PORT=80
+    depends_on:
+      - web
+
+  redis:
+    image: redis:latest
+    restart: always
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
