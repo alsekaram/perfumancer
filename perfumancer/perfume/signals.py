@@ -2,6 +2,7 @@ from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 from django.db import transaction
 from .models import Order, Receipt, ReceiptItem, ReceiptStatus
+from .utils.file_processor import process_invoice_file
 
 
 @receiver(pre_save, sender=Order)
@@ -95,3 +96,29 @@ def create_receipts_on_order_status_change(sender, instance, created, **kwargs):
                 )
 
             print(f"Создан приход №{receipt.id} для поставщика {receipt.supplier}")
+
+
+@receiver(pre_save, sender=Receipt)
+def process_receipt_invoice_file(sender, instance, **kwargs):
+    """
+    Обрабатывает файл накладной перед сохранением:
+    - Конвертирует HEIC в JPEG
+    """
+    if instance.invoice_file and hasattr(instance.invoice_file, 'file'):
+        # Проверяем, что файл был изменен
+        try:
+            # Если это новый объект или файл был изменен
+            if not instance.pk:
+                # Новый объект - обрабатываем файл
+                instance.invoice_file = process_invoice_file(instance.invoice_file)
+            else:
+                # Существующий объект - проверяем, изменился ли файл
+                original = Receipt.objects.get(pk=instance.pk)
+                if original.invoice_file != instance.invoice_file:
+                    instance.invoice_file = process_invoice_file(instance.invoice_file)
+        except Receipt.DoesNotExist:
+            # Объект еще не существует в БД, обрабатываем файл
+            instance.invoice_file = process_invoice_file(instance.invoice_file)
+        except Exception as e:
+            # Логируем ошибку, но не прерываем сохранение
+            print(f"Ошибка обработки файла накладной: {e}")
