@@ -872,9 +872,10 @@ class ReceiptAdmin(admin.ModelAdmin):
     get_order_link.short_description = "Заказ"
     
     def get_invoice_file(self, obj):
-        """Безопасное отображение файла накладной"""
+        """Безопасное отображение файла накладной через proxy"""
         if obj.invoice_file:
-            file_url = obj.invoice_file.url
+            # Используем proxy URL вместо прямого S3 URL
+            proxy_url = obj.get_invoice_proxy_url()
             file_name = obj.invoice_filename
             
             # Определяем иконку в зависимости от расширения
@@ -883,16 +884,15 @@ class ReceiptAdmin(admin.ModelAdmin):
             else:
                 icon = '🖼️'
             
-            # Добавляем информацию о безопасности
             return format_html(
-                '<a href="{}" target="_blank" title="Подписанная ссылка действительна 24 часа">{} {} 🔒</a>',
-                file_url,
+                '<a href="{}" target="_blank" title="Файл через защищённый прокси">{} {} 🔒</a>',
+                proxy_url,
                 icon,
                 file_name
             )
         return "-"
     
-    get_invoice_file.short_description = "Приватный файл"
+    get_invoice_file.short_description = "Файл накладной"
 
     def get_items_count(self, obj):
         return obj.items.count()

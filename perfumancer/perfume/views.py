@@ -2,14 +2,22 @@ from django.core.cache import cache
 from django.http import JsonResponse, HttpResponse, Http404
 from django.shortcuts import redirect, render, get_object_or_404
 from django.contrib.admin.views.decorators import staff_member_required
+from django.http import HttpResponseForbidden
+from django.http import HttpResponseRedirect
+from django.utils.http import quote
 
 from .tasks import update_prices_task
-from .models import Order
+from .models import Order, Receipt
 
 from celery.result import AsyncResult
 from pathlib import Path
 import os
 import logging
+import requests
+from pathlib import Path
+from django.conf import settings
+from django.http import HttpResponseRedirect
+import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -74,3 +82,62 @@ def download_prices(request):
 def admin_order_detail(request, order_id):
     order = get_object_or_404(Order, id=order_id)
     return render(request, "admin/perfume/order/detail.html", {"order": order})
+
+
+import base64
+import json
+
+@staff_member_required
+def invoice_file_proxy(request, receipt_id):
+    """
+    Обеспечивает доступ к файлам через обычный media URL
+    """
+    receipt = get_object_or_404(Receipt, id=receipt_id)
+    
+    if not receipt.invoice_file:
+        return HttpResponseForbidden("Файл не найден")
+    
+    try:
+        # Используем стандартный media путь
+        relative_path = receipt.invoice_file.name  # например: receipts/invoices/2025/07/IMG_9880.PNG
+        local_file_path = Path(settings.BASE_DIR) / 'media' / relative_path
+        
+        # Проверяем, есть ли файл локально
+        if local_file_path.exists():
+            # Файл есть - редирект на обычный media URL
+            media_url = f"/media/{relative_path}"
+            logger.info(f"Файл найден локально: {relative_path}")
+            return HttpResponseRedirect(media_url)
+        else:
+            # Файла нет - скачиваем с S3
+            logger.info(f"Скачиваем файл с S3: {relative_path}")
+            
+            # Создаем папки
+            local_file_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            try:
+                # Скачиваем с S3
+                s3_url = receipt.invoice_file.url
+                result = subprocess.run([
+                    'curl', '-s', '-L', '--max-time', '30', 
+                    '-o', str(local_file_path), s3_url
+                ], capture_output=True, timeout=35)
+                
+                if result.returncode == 0 and local_file_path.exists():
+                    logger.info(f"Файл скачан: {relative_path}")
+                    media_url = f"/media/{relative_path}"
+                    return HttpResponseRedirect(media_url)
+                else:
+                    logger.error(f"Ошибка скачивания: {result.stderr}")
+                    # Fallback на прямую S3 ссылку
+                    return HttpResponseRedirect(receipt.invoice_file.url)
+                    
+            except Exception as e:
+                logger.error(f"Ошибка скачивания: {e}")
+                return HttpResponseRedirect(receipt.invoice_file.url)
+                
+    except Exception as e:
+        logger.error(f"Ошибка обработки файла: {e}")
+        return HttpResponseRedirect(receipt.invoice_file.url)
+
+
