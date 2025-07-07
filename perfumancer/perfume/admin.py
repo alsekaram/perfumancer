@@ -872,24 +872,27 @@ class ReceiptAdmin(admin.ModelAdmin):
     get_order_link.short_description = "Заказ"
     
     def get_invoice_file(self, obj):
-        """Отображение файла накладной"""
+        """Безопасное отображение файла накладной"""
         if obj.invoice_file:
             file_url = obj.invoice_file.url
             file_name = obj.invoice_filename
+            
             # Определяем иконку в зависимости от расширения
-            if file_name.lower().endswith('.pdf'):
+            if file_name and file_name.lower().endswith('.pdf'):
                 icon = '📄'
             else:
                 icon = '🖼️'
+            
+            # Добавляем информацию о безопасности
             return format_html(
-                '<a href="{}" target="_blank">{} {}</a>',
+                '<a href="{}" target="_blank" title="Подписанная ссылка действительна 24 часа">{} {} 🔒</a>',
                 file_url,
                 icon,
                 file_name
             )
         return "-"
     
-    get_invoice_file.short_description = "Файл"
+    get_invoice_file.short_description = "Приватный файл"
 
     def get_items_count(self, obj):
         return obj.items.count()
