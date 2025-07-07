@@ -175,3 +175,19 @@ perfumancer/static
 
 # Production-specific docker-compose files
 docker-compose.prod.yml
+
+# Image files
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.tif
+*.webp
+*.svg
+*.ico
+
+# PDF files
+*.pdf
+
