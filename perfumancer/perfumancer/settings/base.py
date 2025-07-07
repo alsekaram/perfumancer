@@ -11,6 +11,12 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import os
+
+
+# Загрузка .env файла
+from dotenv import load_dotenv
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -37,6 +43,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rangefilter",
+    "storages",
     "perfume.apps.PerfumeConfig",
 ]
 
@@ -114,11 +121,44 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / 'static'
 
-# Media files
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# S3 Configuration для Selectel Cloud Storage (приватные файлы)
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
+AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'ru-1')
+AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_S3_CUSTOM_DOMAIN')
+
+# Настройки для Selectel Cloud Storage
+if AWS_STORAGE_BUCKET_NAME:
+    AWS_S3_ENDPOINT_URL = 'https://s3.ru-1.storage.selcloud.ru'
+
+# Настройки S3 для приватных файлов (безопасность)
+AWS_DEFAULT_ACL = 'private'  # Все файлы приватные по умолчанию
+AWS_S3_FILE_OVERWRITE = False  # Не перезаписываем файлы
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=86400',
+    'ACL': 'private',  # Принудительно приватные файлы
+}
+AWS_S3_SIGNATURE_VERSION = 's3v4'
+AWS_S3_VERIFY = False  # Отключаем SSL проверку для совместимости
+
+# Настройки подписанных URL для безопасного доступа
+AWS_QUERYSTRING_AUTH = True  # Используем подписанные URL
+AWS_QUERYSTRING_EXPIRE = 86400  # URL действительны 24 часа
+
+# Media files configuration (используем кастомный storage)
+if AWS_STORAGE_BUCKET_NAME:
+    # НЕ устанавливаем DEFAULT_FILE_STORAGE, используем кастомный storage в моделях
+    # DEFAULT_FILE_STORAGE будет использоваться только для совместимости
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/' if AWS_S3_CUSTOM_DOMAIN else f'https://{AWS_STORAGE_BUCKET_NAME}.s3.ru-1.storage.selcloud.ru/'
+else:
+    # Локальное хранение файлов для разработки
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Логирование отключено для упрощения системы
