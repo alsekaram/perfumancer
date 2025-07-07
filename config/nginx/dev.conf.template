@@ -1,0 +1,51 @@
+# входной поток для uWSGI через HTTP
+upstream uwsgi_app {
+    server web:8000;
+}
+
+# Кэш для S3 файлов
+proxy_cache_path /var/cache/nginx/s3_cache levels=1:2 keys_zone=s3_cache:10m max_size=1g inactive=24h;
+
+server {
+    listen 80;
+    server_name localhost;
+    error_log stderr warn;
+    access_log /dev/stdout main;
+
+    # Увеличиваем размер загружаемых файлов
+    client_max_body_size 100M;
+
+    location / {
+        proxy_pass http://uwsgi_app;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120;
+        
+        # Поддержка длинных S3 URL с параметрами
+        proxy_buffer_size 32k;
+        proxy_buffers 4 32k;
+        proxy_busy_buffers_size 32k;
+    }
+
+    location /static/ {
+        alias /code/perfumancer/static/;
+        expires 7d;
+    }
+
+    # Обычные media файлы
+    location /media/ {
+        alias /code/perfumancer/media/;
+        expires 24h;
+        add_header Cache-Control "private, max-age=86400";
+        
+        # MIME типы
+        location ~* \.(pdf)$ {
+            add_header Content-Type application/pdf;
+        }
+        location ~* \.(jpg|jpeg|png|gif|bmp|tiff)$ {
+            add_header Content-Type image/jpeg;
+        }
+    }
+}
