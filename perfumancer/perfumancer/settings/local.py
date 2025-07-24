@@ -4,7 +4,6 @@ DEBUG = True
 
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://c149-116-203-69-235.ngrok-free.app",
     "http://localhost:8010",
     "http://127.0.0.1:8010",
     "http://localhost",
