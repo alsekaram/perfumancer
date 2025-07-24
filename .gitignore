@@ -187,6 +187,7 @@ docker-compose.prod.yml
 *.webp
 *.svg
 *.ico
+*.heic
 
 # PDF files
 *.pdf
