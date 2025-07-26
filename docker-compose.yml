@@ -17,8 +17,8 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      # Nginx-темплейты
-      - ./config/nginx:/etc/nginx/templates:ro
+      # Только production template для продакшена
+      - ./config/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
       - .:/code
       # SSL сертификаты монтируются через docker-compose.prod.yml
 
