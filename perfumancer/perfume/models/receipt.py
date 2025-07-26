@@ -21,7 +21,7 @@ def get_invoice_file_storage():
 def process_invoice_file_upload(instance, filename):
     """
     Обработка загружаемого файла накладной с автоматическим именованием
-    Формат: дата_номер_id_кабинет_поставщик.расширение
+    Формат: дата_id_кабинет_поставщик.расширение
     """
     import re
     from perfume.utils.image_converter import convert_image_if_needed
@@ -32,13 +32,6 @@ def process_invoice_file_upload(instance, filename):
     # Базовые компоненты имени файла
     date_str = instance.date.strftime("%Y_%m_%d") if instance.date else timezone.now().strftime("%Y_%m_%d")
     receipt_id = f"receipt_{instance.id}" if instance.id else "receipt_new"
-    
-    # Добавляем номер накладной, если есть
-    invoice_part = ""
-    if instance.invoice_number:
-        # Очищаем номер накладной от специальных символов
-        clean_invoice = re.sub(r'[^\w\-_.]', '_', instance.invoice_number)
-        invoice_part = f"inv_{clean_invoice}"
     
     # Добавляем кабинет
     cabinet_part = ""
@@ -54,11 +47,9 @@ def process_invoice_file_upload(instance, filename):
         except:
             supplier_part = str(instance.supplier_id)
     
-    # Формируем итоговое имя файла в порядке: дата_номер_id_кабинет_поставщик
+    # Формируем итоговое имя файла в порядке: дата_id_кабинет_поставщик
     filename_parts = []
     filename_parts.append(date_str)  # дата
-    if invoice_part:  # номер накладной (если есть)
-        filename_parts.append(invoice_part)
     filename_parts.append(receipt_id)  # id
     if cabinet_part:  # кабинет
         filename_parts.append(cabinet_part)
@@ -120,9 +111,6 @@ class Receipt(models.Model):
         on_delete=models.PROTECT,
         related_name="receipts",
         verbose_name=_("Кабинет/Магазин"),
-    )
-    invoice_number = models.CharField(
-        max_length=100, blank=True, verbose_name=_("Номер накладной")
     )
     invoice_date = models.DateField(
         null=True, blank=True, verbose_name=_("Дата накладной")

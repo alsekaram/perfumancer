@@ -835,7 +835,6 @@ class ReceiptAdmin(admin.ModelAdmin):
         "supplier",
         "cabinet",
         "get_order_link",
-        "invoice_number",
         "invoice_date",
         "get_invoice_file",  # Возвращаем колонку с файлами
         "get_status_display",
@@ -844,7 +843,7 @@ class ReceiptAdmin(admin.ModelAdmin):
     ]
 
     list_filter = ["status", "supplier", "cabinet", "date"]
-    search_fields = ["invoice_number", "order__id", "supplier__name"]
+    search_fields = ["order__id", "supplier__name"]
     inlines = [ReceiptItemInline]
 
     # Фиксированный порядок полей
@@ -852,7 +851,6 @@ class ReceiptAdmin(admin.ModelAdmin):
         "date",
         "supplier",
         "cabinet",
-        "invoice_number",
         "invoice_date",
         "invoice_file",
         "order",
@@ -945,7 +943,7 @@ class ReceiptAdmin(admin.ModelAdmin):
             # Если приход не черновик, блокируем дополнительные поля
             if obj.status.code != "draft":
                 readonly.extend(
-                    ["invoice_number", "invoice_date", "invoice_file", "supplier", "cabinet"]
+                    ["invoice_date", "invoice_file", "supplier", "cabinet"]
                 )
 
         return readonly
