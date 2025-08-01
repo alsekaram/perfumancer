@@ -162,14 +162,24 @@ class Receipt(models.Model):
 
     def save(self, *args, **kwargs):
         """Переопределенное сохранение с автоматической конвертацией HEIC"""
+        file_changed = False
+        old_name = None
 
-        # Если загружается новый файл, проверяем необходимость конвертации
-        if self.invoice_file and hasattr(self.invoice_file, "file"):
+        if self.pk:
+            try:
+                old = Receipt.objects.only("invoice_file").get(pk=self.pk)
+                old_name = old.invoice_file.name if old.invoice_file else None
+            except Receipt.DoesNotExist:
+                old_name = None
+
+        new_name = self.invoice_file.name if self.invoice_file else None
+        file_changed = bool(new_name and new_name != old_name)
+
+        # Конвертируем только если загружен новый файл
+        if file_changed and hasattr(self.invoice_file, "file"):
             from perfume.utils.image_converter import convert_image_if_needed
-
-            # Автоматически конвертируем HEIC в JPEG
             converted_file = convert_image_if_needed(self.invoice_file)
-            if converted_file != self.invoice_file:
+            if converted_file is not self.invoice_file:
                 self.invoice_file = converted_file
 
         super().save(*args, **kwargs)
